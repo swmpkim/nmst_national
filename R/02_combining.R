@@ -29,6 +29,22 @@ groupedSpecies <- map(reserves,
 
 
 # put columns in a nicer order?
+groupedSpecies <- groupedSpecies %>% 
+    select(# identifying cols
+        Reserve:Day,
+        # abiotic catebories   
+        `Total unvegetated`, Bare, Dead, Rock, Wood,
+        Wrack, Overstory, Water, `Other Unvegetated`,
+        # live plant categories   
+        `Total live veg`, `A-Algae`, `B-Brackish`,
+        `F-Freshwater`, `H-Halophyte`, `U-Upland`,
+        `Other live vegetation`,
+        # metrics and ratios
+        EIR, Richness, SWdiv, 
+        Invasive_Cover, Unveg_to_veg,
+        # catchall
+        everything()
+    )
 
 
 # write out the data frames  
