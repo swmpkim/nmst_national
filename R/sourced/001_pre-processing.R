@@ -2,7 +2,9 @@
 
 
 # read data, metadata, and analysis specifications
-dat <- get_data(file_dat, cover_only = TRUE) # gets rid of density and height columns; keeps F_ columns
+dat <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and height columns; keeps F_ columns
+    select(Reserve, SiteID, TransectID, PlotID, Year, Month, Day,
+           Total:ncol(.))    
 stn_tbl <- get_stn_table(file_dat)
 stn_tbl <- stn_tbl %>% 
     mutate(PlotID_full = paste(SiteID, TransectID, PlotID, sep = "-"))
@@ -86,16 +88,22 @@ dat <- left_join(dat, Invasives)
 dat_grouped <- left_join(dat_grouped, Invasives)
 rm(Invasives)
 
-Salt_or_Fresh <- dat_long %>% 
-    summarize(.by = c(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_or_Fresh),
-              Cover = sum(Cover, na.rm = TRUE)) %>% 
-    pivot_wider(names_from = Salt_or_Fresh,
-                values_from = Cover) %>% 
-    mutate(Salt_to_Fresh = Salt / Fresh) %>% 
-    select(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_to_Fresh)
-dat <- left_join(dat, Salt_or_Fresh)
-dat_grouped <- left_join(dat_grouped, Salt_or_Fresh)
-rm(Salt_or_Fresh)
+
+# Salt:Fresh commented out because
+# some reserves have 0s in Fresh, causing 'Inf'
+# and some don't have identified freshwater species at all
+# so this errors
+
+# Salt_or_Fresh <- dat_long %>% 
+#     summarize(.by = c(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_or_Fresh),
+#               Cover = sum(Cover, na.rm = TRUE)) %>% 
+#     pivot_wider(names_from = Salt_or_Fresh,
+#                 values_from = Cover) %>% 
+#     mutate(Salt_to_Fresh = Salt / Fresh) %>% 
+#     select(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_to_Fresh)
+# dat <- left_join(dat, Salt_or_Fresh)
+# dat_grouped <- left_join(dat_grouped, Salt_or_Fresh)
+# rm(Salt_or_Fresh)
 
 Unveg_to_veg <- dat_long %>% 
     summarize(.by = c(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Cover_Categories),
