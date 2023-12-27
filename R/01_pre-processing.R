@@ -23,6 +23,9 @@ for(i in seq_along(reserves)) {
     file_out_fullSpecies <- here::here(outpath, paste0(res, "_veg-fullSpeciesList.RData"))
     file_out_grouped <- here::here(outpath, paste0(res, "_veg-grouped.RData"))
 
+    
+    print(res)
+    
     # process the data
     source(here::here("R", "sourced", "001_pre-processing.R"))
     

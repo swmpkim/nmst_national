@@ -152,7 +152,8 @@ cols_from_stntbl <- c("Reserve", "SiteID", "TransectID", "PlotID",
                       "Orthometric_Height", 
                       "Distance_to_water")
 tmp <- stn_tbl %>% 
-    select(any_of(cols_from_stntbl))
+    select(any_of(cols_from_stntbl)) %>% 
+    distinct()
 dat <- left_join(dat, tmp)
 dat_grouped <- left_join(dat_grouped, tmp)
 rm(cols_from_dat, cols_from_stntbl, tmp)
