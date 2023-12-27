@@ -19,9 +19,11 @@ dat <- dat %>%
     dplyr::mutate(Date = lubridate::decimal_date(lubridate::ymd(paste(Year, Month, Day, sep = "-"))),
                   Years_sinceStart = round(Date - min(Date), 4),
                   StTrns = paste(SiteID, TransectID, sep = "-"),
-                  StTrnsPlt = paste(SiteID, TransectID, PlotID, sep = "-")) %>% 
+                  StTrnsPlt = paste(SiteID, TransectID, PlotID, sep = "-"),
+                  Unique_ID = paste0(Reserve, SiteID, TransectID, PlotID,
+                                     Year, Month, Day)) %>% 
     dplyr::relocate(c(Date, Years_sinceStart), .before = Year) %>% 
-    dplyr::relocate(c(StTrns, StTrnsPlt), .after = PlotID)
+    dplyr::relocate(c(StTrns, StTrnsPlt, Unique_ID), .after = PlotID)
 
 dat <- remove_suspect_values(dat, flags = c("-3"))  # remove suspect values. also removes F_columns.
 dat <- remove_unsampleds(dat)  # should get rid of any dates where a plot was not sampled or was entirely rejected. 
@@ -131,3 +133,26 @@ total_live_abiotic <- dat_long %>%
 dat <- left_join(dat, total_live_abiotic)
 dat_grouped <- left_join(dat_grouped, total_live_abiotic)
 rm(total_live_abiotic)
+
+# add all relevant columns from dat to dat_grouped
+# including specified species
+cols_from_dat <- c("Reserve", "SiteID", "TransectID", "PlotID",
+                     "Vegetation_Zone", "Year", "Month", "Day",
+                     "Date", "Unique_ID", "Years_sinceStart",
+                     "Spartina alterniflora", "Juncus roemerianus",
+                     "Spartina patens", "Salicornia pacifica")
+dat_grouped <- dat %>% 
+    select(any_of(cols_from_dat)) %>% 
+    full_join(dat_grouped)
+
+
+# add relevant columns from station table to both data frames
+cols_from_stntbl <- c("Reserve", "SiteID", "TransectID", "PlotID",
+                      "Latitude", "Longitude",
+                      "Orthometric_Height", 
+                      "Distance_to_water")
+tmp <- stn_tbl %>% 
+    select(any_of(cols_from_stntbl))
+dat <- left_join(dat, tmp)
+dat_grouped <- left_join(dat_grouped, tmp)
+rm(cols_from_dat, cols_from_stntbl, tmp)

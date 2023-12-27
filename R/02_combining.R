@@ -31,7 +31,9 @@ groupedSpecies <- map(reserves,
 # put columns in a nicer order?
 groupedSpecies <- groupedSpecies %>% 
     select(# identifying cols
-        Reserve:Day,
+        Reserve:Years_sinceStart,
+        Latitude, Longitude, Orthometric_Height,
+        Distance_to_water,
         # abiotic catebories   
         `Total unvegetated`, Bare, Dead, Rock, Wood,
         Wrack, Overstory, Water, `Other Unvegetated`,
@@ -42,6 +44,9 @@ groupedSpecies <- groupedSpecies %>%
         # metrics and ratios
         EIR, Richness, SWdiv, 
         Invasive_Cover, Unveg_to_veg,
+        # specific species
+        any_of(c("Spartina alterniflora", "Spartina patens",
+        "Juncus roemerianus", "Salicornia pacifica")),
         # catchall
         everything()
     )
