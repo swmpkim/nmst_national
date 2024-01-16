@@ -22,7 +22,8 @@ time_component_no <- read_sheet(expl_sheet,
 # but be different in different years
 time_component_yes <- read_sheet(expl_sheet, 
                              sheet = "Time added",
-                             skip = 6)  %>% 
+                             skip = 6,
+                             na = c("", "NA"))  %>% 
     janitor::remove_empty("cols") %>% 
     rename(Reserve = `Reserve File`)
 
