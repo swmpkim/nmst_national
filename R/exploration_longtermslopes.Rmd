@@ -1,0 +1,227 @@
+---
+title: "dummy nat'l models"
+date: "`r Sys.Date()`"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      error = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(vegan)
+```
+
+```{r}
+load(here::here("data", "compiled", "veg_and_expl_dfs.RData"))
+```
+
+# calculate long-term trends in veg  
+
+per plot
+
+
+## create nested data frame  
+
+```{r}
+veg_nested <- veg %>% 
+    mutate(ResStTrnsPlt = paste0(Reserve, SiteID, TransectID, PlotID, sep = "_"),
+           date = lubridate::decimal_date(lubridate::ymd(paste(Year, Month, Day)))) %>% 
+    select(ResStTrnsPlt,
+           date,
+           Total.unvegetated:Unveg_to_veg) %>% 
+    group_by(ResStTrnsPlt) %>% 
+    nest()
+```
+
+
+## write and map a simple function  
+
+following along with https://r4ds.had.co.nz/many-models.html#list-columns
+
+```{r}
+unveg_model <- function(df){
+    lm(Total.unvegetated ~ date, data = df)
+}
+```
+
+```{r}
+models <- map(veg_nested$data, unveg_model)
+```
+
+```{r}
+veg_nested <- veg_nested %>% 
+    mutate(unvegetated_model = map(data, unveg_model))
+```
+
+```{r}
+veg_nested %>% 
+    mutate(tidy = map(unvegetated_model, broom::tidy)) %>% 
+    unnest(tidy)
+```
+
+
+# long df then nest
+
+```{r}
+veg_long_nested <- veg %>% 
+    mutate(ResStTrnsPlt = paste0(Reserve, SiteID, TransectID, PlotID, sep = "_"),
+           date = lubridate::decimal_date(lubridate::ymd(paste(Year, Month, Day)))) %>% 
+    select(ResStTrnsPlt,
+           date,
+           Total.unvegetated:Unveg_to_veg) %>%
+    pivot_longer(Total.unvegetated:Unveg_to_veg,
+                 names_to = "response",
+                 values_to = "cover") %>% 
+    group_by(ResStTrnsPlt, response) %>% 
+    nest()
+```
+
+## run the models  
+
+```{r}
+model_change <- function(df){
+    if(sum(!is.na(df$cover)) < 3){
+        return(NA)
+    }
+    lm(cover ~ date, data = df)
+}
+
+
+model_change2 <- possibly(model_change, otherwise = NA)
+```
+
+
+```{r}
+veg_long_nested <- veg_long_nested %>% 
+    mutate(model = map(data, model_change2)) %>% 
+    filter(!is.na(model))
+```
+
+```{r}
+slopes_long <- veg_long_nested %>% 
+    select(ResStTrnsPlt, response, model) %>% 
+    mutate(tidy = map(model, broom::tidy)) %>% 
+    unnest(tidy) %>% 
+    filter(term == "date")
+```
+
+## make histograms  
+
+```{r}
+ggplot(slopes_long) +
+    geom_histogram(aes(x = estimate, fill = response),
+                   col = "gray40",
+                   bins = 30) +
+    facet_wrap(~response, scales = "free") +
+    geom_vline(xintercept = 0,
+               col = "black",
+               linewidth = 1) +
+    scale_y_log10() +
+    theme(legend.position = "none") +
+    labs(title = "long-term change in various categories",
+         x = "slope estimate (units/year)",
+         y = "# stations with this slope (note log10-scaled axis)")
+```
+
+```{r}
+slopes_scaled %>% 
+    pivot_longer(everything(),
+                names_to = "response",
+                values_to = "scaled_slope") %>% 
+    ggplot() +
+    geom_histogram(aes(x = scaled_slope, fill = response)) +
+    facet_wrap(~response, scales = "free") +
+    scale_y_log10() +
+    theme(legend.position = "none")
+```
+
+
+# change shape for ordination  
+
+```{r}
+slopes_wide <- slopes_long %>% 
+    select(ResStTrnsPlt, response, estimate) %>% 
+    pivot_wider(names_from = response,
+                values_from = estimate) %>% 
+    column_to_rownames("ResStTrnsPlt")
+```
+
+```{r}
+slopes_for_csv <- slopes_wide %>% 
+    rownames_to_column("ResStTrnsPlt")
+write.csv(slopes_for_csv, here::here("data", "compiled", "slopes.csv"), row.names = FALSE, na = "")
+```
+
+
+Scale slopes (center, and divide by sd). Then replace missings with 0.  
+
+```{r}
+slopes_scaled <- slopes_wide %>% 
+    apply(., 2, scale) %>% 
+    as.data.frame()
+rownames(slopes_scaled) <- rownames(slopes_wide)
+
+slopes_scaled[][is.na(slopes_scaled[])] <- 0
+```
+
+# PCA  
+
+```{r}
+pca_out <- rda(slopes_scaled)
+```
+
+```{r}
+screeplot(pca_out, type = "line")
+```
+
+
+```{r}
+eigs <- summary(eigenvals(pca_out))
+knitr::kable(eigs[, 1:6],
+             caption = "Variance explained by PC axes",
+             digits = 4)
+```
+
+4 axes seems about right for this; let's pull the loadings from those 4 axes  
+
+```{r}
+knitr::kable(scores(pca_out, 
+                    choices = 1:4,
+                    display = "species",
+                    scaling = 0),
+             caption = "unscaled loadings onto PC axes",
+             digits = 4)
+```
+
+```{r}
+biplot(pca_out,
+       display = c("sites",
+                   "species"),
+       type = c("text",
+                "point"),
+       xlab = paste0("PC1 (", round(eigs[2, 1]*100, 2), "%)"),
+       ylab = paste0("PC2 (", round(eigs[2, 2]*100, 2), "%)"))
+```
+
+
+```{r}
+biplot(pca_out,
+       display = c("sites",
+                   "species"),
+       type = c("text",
+                "text"),
+       xlab = paste0("PC1 (", round(eigs[2, 1]*100, 2), "%)"),
+       ylab = paste0("PC2 (", round(eigs[2, 2]*100, 2), "%)"))
+```
+
+# PCA - zone within reserve  
+
+

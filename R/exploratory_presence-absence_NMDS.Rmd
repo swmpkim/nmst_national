@@ -1,0 +1,135 @@
+---
+title: "Background NMDS"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+...on species presence/absence by site, followed by group presence/absence by site.  
+
+
+```{r}
+library(tidyverse)
+library(vegan)
+```
+
+```{r}
+dat_spp <- read.csv(here::here("data", "compiled",
+                               "ALL_veg-fullSpeciesList.csv"))
+dat_grouped <- read.csv(here::here("data", "compiled",
+                                   "ALL_veg-grouped.csv"))
+```
+
+
+Remove any species that start with unknown or unidentified and/or that end with _dead
+
+```{r}
+dat_spp <- dat_spp %>% 
+    select(-starts_with("Unidentified", ignore.case = TRUE),
+           -starts_with("unknown", ignore.case = TRUE),
+           -ends_with("dead", ignore.case = TRUE))
+```
+
+
+```{r}
+# convert to presence/absence by site across the entire data frame  
+
+dat_spp_pa <- dat_spp %>% 
+    summarize(.by = c(Reserve, SiteID),
+              across(Bare:Ulva.Lactuca, function(x) ifelse(sum(x, na.rm = TRUE) > 0, 1, 0)))
+
+dat_grouped_pa <- dat_grouped %>% 
+    summarize(.by = c(Reserve, SiteID),
+              across(Total.unvegetated:U.Upland, function(x) ifelse(sum(x, na.rm = TRUE) > 0, 1, 0)))
+```
+
+```{r}
+mds_spp <- metaMDS(dat_spp_pa[, 3:ncol(dat_spp_pa)])
+
+spp_spscores <- as.data.frame(scores(mds_spp)$species) %>% 
+    rownames_to_column("species") %>% 
+    mutate(magnitude = sqrt(NMDS1^2 + NMDS2^2))
+spp_sp_top <- spp_spscores %>% 
+    arrange(desc(magnitude)) %>% 
+    head(30)
+spp_sitescores <- as.data.frame(scores(mds_spp)$sites) %>% 
+    mutate(Reserve = dat_spp_pa$Reserve,
+           region = case_when(Reserve %in% c("GRB", "WEL", "WQB", "HUD-PIER", "HUD-TIV", "NAR") ~ "New England",
+                              Reserve %in% c("APA", "GND", "MAR") ~ "Gulf of Mexico",
+                              Reserve %in% c("CBM", "CBV", "DEL-BCR", "DEL-SJR", "JAC") ~ "Mid-Atlantic",
+                              Reserve %in% c("ACE", "NIW", "NOC", "GTM") ~ "Southeast",
+                              Reserve %in% c("KAC") ~ "Alaska",
+                              Reserve %in% c("SOS", "ELK", "TJR") ~ "West Coast",
+                              .default = "Kim missed one"))
+```
+
+```{r}
+p <- ggplot(spp_sitescores, aes(x = NMDS1, y = NMDS2)) +
+    geom_segment(data = spp_spscores,
+                 aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2),
+                 col = "gray",
+                 alpha = 0.6) +
+    geom_point(aes(col = region),
+               size = 3) +
+    scale_color_okabeito() +
+    # geom_text(data = spp_spscores,
+    #              aes(x = NMDS1, y = NMDS2, label = species),
+    #              col = "red") +
+    labs(title = "NMDS on presence/absence of all species") +
+    theme_bw()
+p
+
+p2 <- p +
+    geom_point_interactive(aes(col = region, tooltip = Reserve))
+girafe(ggobj = p2)
+```
+
+
+
+
+```{r}
+mds_grp <- metaMDS(dat_grouped_pa[, 3:ncol(dat_grouped_pa)])
+
+grp_spscores <- as.data.frame(scores(mds_grp)$species) %>% 
+    rownames_to_column("species") %>% 
+    mutate(magnitude = sqrt(NMDS1^2 + NMDS2^2))
+grp_sp_top <- grp_spscores %>% 
+    arrange(desc(magnitude)) %>% 
+    head(30)
+grp_sitescores <- as.data.frame(scores(mds_grp)$sites) %>% 
+    mutate(Reserve = dat_grouped_pa$Reserve,
+           region = case_when(Reserve %in% c("GRB", "WEL", "WQB", "HUD-PIER", "HUD-TIV", "NAR") ~ "New England",
+                              Reserve %in% c("APA", "GND", "MAR") ~ "Gulf of Mexico",
+                              Reserve %in% c("CBM", "CBV", "DEL-BCR", "DEL-SJR", "JAC") ~ "Mid-Atlantic",
+                              Reserve %in% c("ACE", "NIW", "NOC", "GTM") ~ "Southeast",
+                              Reserve %in% c("KAC") ~ "Alaska",
+                              Reserve %in% c("SOS", "ELK", "TJR") ~ "West Coast",
+                              .default = "Kim missed one"))
+```
+
+```{r}
+p <- ggplot(grp_sitescores, aes(x = NMDS1, y = NMDS2)) +
+    geom_segment(data = grp_spscores,
+                 aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2),
+                 col = "gray") +
+    geom_point(aes(col = region),
+               size = 3) +
+    geom_text(data = grp_spscores,
+                 aes(x = NMDS1, y = NMDS2, label = species),
+                 col = "gray40",
+              size = 3) +
+    scale_color_okabeito() +
+    labs(title = "NMDS on presence/absence of all groups") +
+    theme_bw()
+
+p
+
+p2 <- p +
+    geom_point_interactive(data = grp_sitescores, aes(x = NMDS1, y = NMDS2, 
+                                                      col = region,
+                                                      tooltip = Reserve))
+girafe(ggobj = p2)
+```
