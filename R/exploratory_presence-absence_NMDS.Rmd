@@ -5,7 +5,9 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
 ```
 
 ...on species presence/absence by site, followed by group presence/absence by site.  
@@ -14,6 +16,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(tidyverse)
 library(vegan)
+library(khroma)
+library(ggiraph)
 ```
 
 ```{r}
@@ -47,7 +51,26 @@ dat_grouped_pa <- dat_grouped %>%
 ```
 
 ```{r}
-mds_spp <- metaMDS(dat_spp_pa[, 3:ncol(dat_spp_pa)])
+key_species <- c("Spartina.alterniflora",
+                 "Spartina.patens",
+                 "Spartina.foliosa",
+                 "Salicornia.virginica",
+                 "Salicornia.pacifica",
+                 "Juncus.roemerianus",
+                 "Distichlis.spicata",
+                 "Sarcocornia.perennis",
+                 "Carex.lyngbyei",
+                 "Carex.stricta",
+                 "Panicum.repens",
+                 # "Sagittaria.graminea",
+                 "Bidens.mitis",
+                 "Rhynchospera.sp",
+                 "Typha.latifolia")
+```
+
+
+```{r}
+mds_spp <- metaMDS(dat_spp_pa[, 3:ncol(dat_spp_pa)], k = 3, trace = 0)
 
 spp_spscores <- as.data.frame(scores(mds_spp)$species) %>% 
     rownames_to_column("species") %>% 
@@ -55,6 +78,8 @@ spp_spscores <- as.data.frame(scores(mds_spp)$species) %>%
 spp_sp_top <- spp_spscores %>% 
     arrange(desc(magnitude)) %>% 
     head(30)
+spp_sp_key <- spp_spscores %>% 
+    filter(species %in% key_species)
 spp_sitescores <- as.data.frame(scores(mds_spp)$sites) %>% 
     mutate(Reserve = dat_spp_pa$Reserve,
            region = case_when(Reserve %in% c("GRB", "WEL", "WQB", "HUD-PIER", "HUD-TIV", "NAR") ~ "New England",
@@ -71,27 +96,32 @@ p <- ggplot(spp_sitescores, aes(x = NMDS1, y = NMDS2)) +
     geom_segment(data = spp_spscores,
                  aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2),
                  col = "gray",
-                 alpha = 0.6) +
-    geom_point(aes(col = region),
-               size = 3) +
+                 alpha = 0.3) +
+    # geom_point(aes(col = region),
+    #            size = 3) +
     scale_color_okabeito() +
-    # geom_text(data = spp_spscores,
-    #              aes(x = NMDS1, y = NMDS2, label = species),
-    #              col = "red") +
-    labs(title = "NMDS on presence/absence of all species") +
+    geom_segment(data = spp_sp_key,
+                 aes(x = 0, y = 0, xend = NMDS1*0.9, yend = NMDS2*0.9),
+                 col = "red3") +
+    geom_point_interactive(aes(col = region, tooltip = Reserve),
+                           size = 2) +
+    geom_text(data = spp_sp_key,
+              aes(x = NMDS1, y = NMDS2, label = species),
+              col = "red3",
+              alpha = 0.8,
+              size = 3) +
+    labs(title = "NMDS on presence/absence of all species",
+         subtitle = paste0("3-dimensional stress: ", round(mds_spp$stress, 3))) +
     theme_bw()
-p
 
-p2 <- p +
-    geom_point_interactive(aes(col = region, tooltip = Reserve))
-girafe(ggobj = p2)
+girafe(ggobj = p)
 ```
 
 
 
 
 ```{r}
-mds_grp <- metaMDS(dat_grouped_pa[, 3:ncol(dat_grouped_pa)])
+mds_grp <- metaMDS(dat_grouped_pa[, 3:ncol(dat_grouped_pa)], trace = 0)
 
 grp_spscores <- as.data.frame(scores(mds_grp)$species) %>% 
     rownames_to_column("species") %>% 
@@ -115,21 +145,18 @@ p <- ggplot(grp_sitescores, aes(x = NMDS1, y = NMDS2)) +
     geom_segment(data = grp_spscores,
                  aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2),
                  col = "gray") +
-    geom_point(aes(col = region),
-               size = 3) +
+    geom_point_interactive(data = grp_sitescores, aes(x = NMDS1, y = NMDS2, 
+                                                      col = region,
+                                                      tooltip = Reserve),
+                           size = 2) +
     geom_text(data = grp_spscores,
                  aes(x = NMDS1, y = NMDS2, label = species),
                  col = "gray40",
               size = 3) +
     scale_color_okabeito() +
-    labs(title = "NMDS on presence/absence of all groups") +
+    labs(title = "NMDS on presence/absence of all groups",
+         subtitle = paste0("3-dimensional stress: ", round(mds_grp$stress, 3))) +
     theme_bw()
 
-p
-
-p2 <- p +
-    geom_point_interactive(data = grp_sitescores, aes(x = NMDS1, y = NMDS2, 
-                                                      col = region,
-                                                      tooltip = Reserve))
-girafe(ggobj = p2)
+girafe(ggobj = p)
 ```
