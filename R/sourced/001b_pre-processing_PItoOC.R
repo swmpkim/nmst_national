@@ -2,6 +2,8 @@ library(googlesheets4)
 library(tidyverse)
 
 
+source(here::here("R", "sourced", "functions_natl.R"))
+
 # PI reserves ----  
 
 expl_sheet <- "https://docs.google.com/spreadsheets/d/12LDWfJvE4Cye56O-Uv_cmGr2a4WLqcKD24OzPVrAEUI/edit?usp=sharing"
@@ -37,6 +39,9 @@ pi_conv <- expl_dat %>%
 morph_conv <- tibble::tribble(
                           ~Morphology, ~`Correction.Factor.(CF)`,
                           "Bare/Dead",                    1.2101,
+                               "Bare",                    1.2101,
+                               "Dead",                    1.2101,
+                  "Other Unvegetated",                    1.2101,
                     "Broad 'Grasses'",                    0.6555,
                            "Climbers",                    0.6023,
                               "Forbs",                    0.3853,
@@ -54,17 +59,74 @@ morph_dat <- readxl::read_xlsx(here::here("data",
                                           "National species list and archetypes.xlsx"),
                                sheet = "Unique Species List")
 
+
+
 # test on one reserve ----
+# has to happen at reserve level (rather than national data frame) 
+# because next the species get condensed to group
+# which is in the reserve spec files
 
-file_dat <- here::here("data", "reserve_level", "NAR_veg.xlsx")
 
-source(here::here("R", "sourced", "functions_natl.R"))
+reserve <- "NAR"
+
+filename <- paste0(reserve, "_veg.xlsx")
+file_dat <- here::here("data", "reserve_level", filename)
+
+mult_fct <- pi_conv$pi_mult_factor[which(pi_conv$reserve == reserve)]
 
 # read data
-dat <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and height columns; keeps F_ columns
-    select(Reserve, SiteID, TransectID, PlotID, Year, Month, Day,
-           Total:ncol(.),
+dat_full <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and height columns; keeps F_ columns
+    mutate(uniqueID = paste0(SiteID, TransectID, PlotID, Year, Month, Day)) %>% 
+    relocate(uniqueID)
+
+dat_to_convert <- dat_full %>% 
+    select(Total:ncol(.),
            -any_of(starts_with("F_")),
            -Total)    
 
+# convert so it's like there were 100 points
+dat_to100pts <- dat_to_convert %>% 
+    mutate(across(everything(), function(x) x*mult_fct))
 
+# apply regression/morphological correction factor
+# need to connect species to archetypes first
+morph_toJoin <- morph_dat %>% 
+    select(species = "Species Name",
+           Morphology = "Morphological archetype") %>% 
+    left_join(morph_conv)
+
+dat_toMorph <- dat_to100pts %>% 
+    mutate(uniqueID = dat_full$uniqueID) %>% 
+    pivot_longer(-uniqueID,
+                names_to = "species",
+                values_to = "cover") %>% 
+    left_join(morph_toJoin) %>% 
+    mutate(Correction_Factor = case_when(is.na(Correction_Factor) ~ 1,
+                                         .default = Correction_Factor),
+           corrected_cover = cover * Correction_Factor)
+
+dat_morphed <- dat_toMorph %>% 
+    select(uniqueID, species, corrected_cover) %>% 
+    pivot_wider(names_from = species,
+                values_from = corrected_cover) %>% 
+    column_to_rownames("uniqueID")
+
+
+# normalize to 100
+dat_morphed$rowTotal <- rowSums(dat_morphed, na.rm = TRUE)
+to_process <- names(dat_morphed)[-which(names(dat_morphed) == "rowTotal")]
+dat_forcedTo100 <- dat_morphed %>% 
+    mutate(across(all_of(to_process),
+                  .fns = ~round(./rowTotal * 100, 2))) %>% 
+    select(-rowTotal) %>% 
+    rownames_to_column("uniqueID")
+
+# verify
+rowSums(dat_forcedTo100, na.rm = TRUE)
+
+# reconnect it to the full data
+dat_meta <- dat_full %>% 
+    select(uniqueID:Total,
+           -Unique_ID,
+           -Total)
+dat_out <- left_join(dat_meta, dat_forcedTo100)
