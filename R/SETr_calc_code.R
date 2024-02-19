@@ -104,7 +104,7 @@ if(sum(mismatches) > 0){
 # get rid of any placeholders; make sure set_id is a factor;
 # make sure reserve, station, arm_position, and pin_number are character vectors
 # paste year, month, and day together into "date"
-dat <- dat %>%
+dat <- dat_long %>%
     mutate(date = lubridate::ymd(paste(year, month, day))) %>% 
     filter(!is.na(date),
            !is.na(pin_number)) %>%
@@ -132,7 +132,27 @@ partial_dat <- nrow(dat) > 0 & nrow(not_enough_df) > 0  # this will join data fr
 # calculate
 models2 <- dat %>%
     group_by(reserve, set_id) %>%
-    do(mod = lme(pin_height ~ date, data = ., random = ~1|arm_position/pin_number, na.action = na.omit))
+    do(mod = lme(as.numeric(height_mm) ~ date, data = ., random = ~1|arm_position/pin_number, na.action = na.omit))
+
+# for loop for file that's acting up
+out <- list()
+for(i in seq_along(unique(dat$set_id))){
+    set <- unique(dat$set_id)[i]
+    tmp <- dat %>% filter(set_id == set)
+    ts_tmp <- tmp %>% 
+        filter(!is.na(height_mm)) 
+    ts_length <- as.numeric(max(ts_tmp$date) - min(ts_tmp$date))
+    if(ts_length < 365*4.5){
+        out[[i]] <- "not enough data to run model"
+        names(out)[i] <- set
+    } else {
+        mod <- lme(as.numeric(height_mm) ~ date, data = tmp, random = ~1|arm_position/pin_number, na.action = na.omit)
+        out[[i]] <- intervals(mod, which = "fixed")
+        names(out)[i] <- set
+    }
+    
+}
+
 
 lmm_out <- models2 %>% 
     mutate(rate = intervals(mod, which = "fixed")$fixed["date", 2] * 365.25,
