@@ -1,4 +1,5 @@
 library(googlesheets4)
+library(googledrive)
 library(tidyverse)
 
 
@@ -39,10 +40,7 @@ pi_conv <- expl_dat %>%
 morph_conv <- tibble::tribble(
                           ~Morphology, ~`Correction.Factor.(CF)`,
                           "Bare/Dead",                    1.2101,
-                               "Bare",                    1.2101,
-                               "Dead",                    1.2101,
-                  "Other Unvegetated",                    1.2101,
-                    "Broad 'Grasses'",                    0.6555,
+                          "Broad 'Grasses'",              0.6555,
                            "Climbers",                    0.6023,
                               "Forbs",                    0.3853,
                        "Ground/Algae",                     0.604,
@@ -55,10 +53,17 @@ names(morph_conv) <- c("Morphology", "Correction_Factor")
 
 # Morphological archetypes ----
 
-morph_dat <- readxl::read_xlsx(here::here("data", 
-                                          "National species list and archetypes.xlsx"),
-                               sheet = "Unique Species List")
-
+# download the latest version of the excel file in google drive
+# this is different from reading in the explanatory matrix because
+# the former was a google sheet; this is an actual excel file, just stored in drive
+morph_sheet <- "https://docs.google.com/spreadsheets/d/14GS4vqd1B62mgTI8_Yj8qde9RIDUPCG6/edit?usp=sharing&ouid=100678166508144783920&rtpof=true&sd=true"
+drive_download(morph_sheet, path = here::here("data",
+                                              "morph_file.xlsx"),
+               overwrite = TRUE)
+# and read it in
+morph_dat <- readxl::read_xlsx(here::here("data",
+                                          "morph_file.xlsx"),
+                               sheet = "Unique List - species") 
 
 
 # test on one reserve ----
@@ -67,7 +72,7 @@ morph_dat <- readxl::read_xlsx(here::here("data",
 # which is in the reserve spec files
 
 
-reserve <- "NAR"
+reserve <- "WEL"
 
 filename <- paste0(reserve, "_veg.xlsx")
 file_dat <- here::here("data", "reserve_level", filename)
@@ -91,9 +96,10 @@ dat_to100pts <- dat_to_convert %>%
 # apply regression/morphological correction factor
 # need to connect species to archetypes first
 morph_toJoin <- morph_dat %>% 
-    select(species = "Species Name",
+    select(species = "Species/Cover",
            Morphology = "Morphological archetype") %>% 
-    left_join(morph_conv)
+    left_join(morph_conv) %>% 
+    distinct()
 
 dat_toMorph <- dat_to100pts %>% 
     mutate(uniqueID = dat_full$uniqueID) %>% 
@@ -122,7 +128,7 @@ dat_forcedTo100 <- dat_morphed %>%
     rownames_to_column("uniqueID")
 
 # verify
-rowSums(dat_forcedTo100, na.rm = TRUE)
+hist(rowSums(dat_forcedTo100[2:ncol(dat_forcedTo100)], na.rm = TRUE), breaks = 20)
 
 # reconnect it to the full data
 dat_meta <- dat_full %>% 
@@ -130,3 +136,4 @@ dat_meta <- dat_full %>%
            -Unique_ID,
            -Total)
 dat_out <- left_join(dat_meta, dat_forcedTo100)
+
