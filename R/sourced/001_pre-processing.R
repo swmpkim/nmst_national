@@ -2,9 +2,19 @@
 
 
 # read data, metadata, and analysis specifications
+# remove any "other layer" groupings (e.g. overstory, water)
+
+
+# Ocular Cover reserves - just pull it as-is; remove other layers slightly later
 dat <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and height columns; keeps F_ columns
     select(Reserve, SiteID, TransectID, PlotID, Year, Month, Day,
            Total:ncol(.))    
+
+# PI reserves - convert PI-to-OC first
+# (source 001b_pre-processing_PItoOC.R)
+
+
+
 stn_tbl <- get_stn_table(file_dat)
 stn_tbl <- stn_tbl %>% 
     mutate(PlotID_full = paste(SiteID, TransectID, PlotID, sep = "-"))
@@ -90,6 +100,8 @@ dat <- left_join(dat, Invasives)
 dat_grouped <- left_join(dat_grouped, Invasives)
 rm(Invasives)
 
+
+# modify this to be Salt/Total
 
 # Salt:Fresh commented out because
 # some reserves have 0s in Fresh, causing 'Inf'
