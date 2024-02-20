@@ -23,6 +23,9 @@ if(pi_reserve){
 
 # now do the rest of the pre-processing
 
+# if there is an F_Record column, get rid of it
+if("F_Record" %in% names(dat)) dat$F_Record <- NULL
+
 stn_tbl <- get_stn_table(file_dat)
 stn_tbl <- stn_tbl %>% 
     mutate(PlotID_full = paste(SiteID, TransectID, PlotID, sep = "-"))
@@ -56,6 +59,7 @@ dat_long <- dat %>%
            Salt_or_Fresh = case_when(Plant_Categories %in% c("B-Brackish", "H-Halophyte", "A-Algae") ~ "Salt",
                                      Plant_Categories %in% c("F-Freshwater", "U-Upland") ~ "Fresh",
                                      .default = "Neither"),
+           Salt_or_Fresh = factor(Salt_or_Fresh, levels = c("Salt", "Fresh", "Neither")),
            grouping_category = case_when(!is.na(NMST_Groupings) ~ NMST_Groupings,
                                          !is.na(Plant_Categories) ~ Plant_Categories,
                                          .default = Cover_Categories))
@@ -117,8 +121,11 @@ Salt_to_Total <- dat_long %>%
     summarize(.by = c(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_or_Fresh),
               Cover = sum(Cover, na.rm = TRUE)) %>%
     pivot_wider(names_from = Salt_or_Fresh,
+                names_expand = TRUE,
                 values_from = Cover) %>%
-    mutate(Total_Live = live_totals,
+    mutate(Salt = case_when(is.na(Salt) ~ 0,
+                            .default = Salt),
+           Total_Live = live_totals,
            Salt_to_Total = case_when(Total_Live == 0 ~ NA_real_,
                                      .default = Salt / Total_Live)) %>%
     select(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_to_Total)
