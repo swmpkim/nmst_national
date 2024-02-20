@@ -2,7 +2,11 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(readxl)
+library(tibble)
 library(vegan)
+library(googlesheets4)
+library(googledrive)
+
 
 path <- here::here("data", "reserve_level")
 outpath <- here::here("data", "intermediate")
@@ -10,6 +14,11 @@ reserves <- stringr::str_sub(dir(path, pattern = "_veg.xlsx$"), end = -10)
 
 # read in functions
 source(here::here("R", "sourced", "functions_natl.R"))
+
+# get set up for PI-vs-OC processing paths
+source(here::here("R", "sourced", "001c_setup-for-PI-or-OC.R"))
+
+
 
 strt<-Sys.time()
 

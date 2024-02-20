@@ -1,14 +1,29 @@
 # most of this is copied from reserve level 01_Veg_analyses.Rmd
 
+# check and see if reserve needs to go down PI pathway or not
+pi_reserve <- res %in% pi_conv$reserve
+
+if(pi_reserve){
+    source(here::here("R", "sourced", "001b_pre-processing_PItoOC.R"))
+    dat <- dat_out %>% 
+        select(-uniqueID)
+    # species_info sheet is read in already from 001b
+} else {
+    dat <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and height columns; keeps F_ columns
+        select(Reserve, SiteID, TransectID, PlotID, Year, Month, Day,
+               Total:ncol(.)) 
+    species_info <- get_species_info(file_dat)
+    otherLayers <- unlist(species_info[species_info$Cover_Categories == "Other layer", "Species"])
+    dat <- dat %>% 
+        select(-any_of(otherLayers))
+    rm(otherLayers)
+    
+}
 
 # read data, metadata, and analysis specifications
 # remove any "other layer" groupings (e.g. overstory, water)
 
-
 # Ocular Cover reserves - just pull it as-is; remove other layers slightly later
-dat <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and height columns; keeps F_ columns
-    select(Reserve, SiteID, TransectID, PlotID, Year, Month, Day,
-           Total:ncol(.))    
 
 # PI reserves - convert PI-to-OC first
 # (source 001b_pre-processing_PItoOC.R)
@@ -18,7 +33,6 @@ dat <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and heig
 stn_tbl <- get_stn_table(file_dat)
 stn_tbl <- stn_tbl %>% 
     mutate(PlotID_full = paste(SiteID, TransectID, PlotID, sep = "-"))
-species_info <- get_species_info(file_dat)
 eis <- get_ecotone_invaders(file = file_specs)
 
 # remove vegetation zones from eis data frame that don't appear in the station table
