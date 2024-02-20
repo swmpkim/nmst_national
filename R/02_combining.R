@@ -33,10 +33,10 @@ groupedSpecies <- groupedSpecies %>%
     select(# identifying cols
         Reserve:Years_sinceStart,
         Latitude, Longitude, Orthometric_Height,
-        Distance_to_water,
+        Distance_to_Water,
         # abiotic catebories   
         `Total unvegetated`, Bare, Dead, Rock, Wood,
-        Wrack, Overstory, Water, `Other Unvegetated`,
+        Wrack, Water, `Other Unvegetated`,   # Overstory, 
         # live plant categories   
         `Total live veg`, `A-Algae`, `B-Brackish`,
         `F-Freshwater`, `H-Halophyte`, `U-Upland`,

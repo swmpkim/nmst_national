@@ -35,7 +35,11 @@ eis <- get_ecotone_invaders(file = file_specs)
 eis <- eis[eis$Vegetation_Zone %in% unique(stn_tbl$Vegetation_Zone), ]
 
 # add some columns to dat
+# and get rid of troublesome columns
 dat <- dat %>% 
+    select(-any_of(starts_with("Distance")), 
+           -any_of(c("Vegetation_Zone", 
+                   "Orthometric_Height"))) %>% 
     dplyr::mutate(Date = lubridate::decimal_date(lubridate::ymd(paste(Year, Month, Day, sep = "-"))),
                   Years_sinceStart = round(Date - min(Date), 4),
                   StTrns = paste(SiteID, TransectID, sep = "-"),
@@ -44,6 +48,7 @@ dat <- dat %>%
                                      Year, Month, Day)) %>% 
     dplyr::relocate(c(Date, Years_sinceStart), .before = Year) %>% 
     dplyr::relocate(c(StTrns, StTrnsPlt, Unique_ID), .after = PlotID)
+
 
 dat <- remove_suspect_values(dat, flags = c("-3"))  # remove suspect values. also removes F_columns.
 dat <- remove_unsampleds(dat)  # should get rid of any dates where a plot was not sampled or was entirely rejected. 
@@ -176,10 +181,11 @@ dat_grouped <- dat %>%
 cols_from_stntbl <- c("Reserve", "SiteID", "TransectID", "PlotID",
                       "Latitude", "Longitude",
                       "Orthometric_Height", 
-                      "Distance_to_water")
+                      "Distance_to_Water")
 tmp <- stn_tbl %>% 
     select(any_of(cols_from_stntbl)) %>% 
     distinct()
 dat <- left_join(dat, tmp)
 dat_grouped <- left_join(dat_grouped, tmp)
 rm(cols_from_dat, cols_from_stntbl, tmp)
+

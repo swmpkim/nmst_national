@@ -16,7 +16,8 @@ time_component_no <- read_sheet(expl_sheet,
     janitor::remove_empty("cols") %>% 
     select(Reserve = `Reserve File`,
            SiteID = `Site ID (reserve files)`,
-           everything())
+           everything()) %>% 
+    mutate(`SET change` = unlist(`SET change`))
 
 # a row for every year at each reserve - will be repeated for every site/transect/plot within a year
 # but be different in different years
