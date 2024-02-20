@@ -72,7 +72,7 @@ morph_dat <- readxl::read_xlsx(here::here("data",
 # which is in the reserve spec files
 
 
-reserve <- "WEL"
+reserve <- "ACE"
 
 filename <- paste0(reserve, "_veg.xlsx")
 file_dat <- here::here("data", "reserve_level", filename)
@@ -88,6 +88,13 @@ dat_to_convert <- dat_full %>%
     select(Total:ncol(.),
            -any_of(starts_with("F_")),
            -Total)    
+
+# remove 'Other layer' species
+species_info <- get_species_info(file_dat)
+otherLayers <- unlist(species_info[species_info$Cover_Categories == "Other layer", "Species"])
+dat_to_convert <- dat_to_convert %>% 
+    select(-any_of(otherLayers))
+rm(otherLayers)
 
 # convert so it's like there were 100 points
 dat_to100pts <- dat_to_convert %>% 
@@ -136,4 +143,9 @@ dat_meta <- dat_full %>%
            -Unique_ID,
            -Total)
 dat_out <- left_join(dat_meta, dat_forcedTo100)
-
+# write that out for later qa/qc checking
+fileout <- paste0(reserve, "_OCfromPI.csv")
+file_dat <- here::here("data", "PItoOC", fileout)
+write.csv(dat_out, file_dat, 
+          row.names = FALSE,
+          na = "")
