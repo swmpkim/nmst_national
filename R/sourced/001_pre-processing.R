@@ -3,6 +3,7 @@
 # check and see if reserve needs to go down PI pathway or not
 pi_reserve <- res %in% pi_conv$reserve
 
+# and send it down that pathway.... or not
 if(pi_reserve){
     source(here::here("R", "sourced", "001b_pre-processing_PItoOC.R"))
     dat <- dat_out %>% 
@@ -20,15 +21,7 @@ if(pi_reserve){
     
 }
 
-# read data, metadata, and analysis specifications
-# remove any "other layer" groupings (e.g. overstory, water)
-
-# Ocular Cover reserves - just pull it as-is; remove other layers slightly later
-
-# PI reserves - convert PI-to-OC first
-# (source 001b_pre-processing_PItoOC.R)
-
-
+# now do the rest of the pre-processing
 
 stn_tbl <- get_stn_table(file_dat)
 stn_tbl <- stn_tbl %>% 
@@ -83,6 +76,7 @@ spps_live <- species_info$Species[species_info$Cover_Categories == "Live vegetat
 spps_live <- spps_live[which(spps_live %in% names(dat))]
 dat_live <- dat %>% 
     select(all_of(spps_live))
+live_totals <- rowSums(dat_live, na.rm = TRUE) # for later joining to wide dfs
 swdiv <- diversity(dat_live, index = "shannon")
 rich <- specnumber(dat_live)
 dat_div <- dat %>% 
@@ -115,23 +109,22 @@ dat_grouped <- left_join(dat_grouped, Invasives)
 rm(Invasives)
 
 
-# modify this to be Salt/Total
+# modify this to be Salt/Total, per email chain from 1/8/2024
+# Re: Nat'l data frame - Re: Namaste TWG follow up
+# by "Total", we want total live vegetation
 
-# Salt:Fresh commented out because
-# some reserves have 0s in Fresh, causing 'Inf'
-# and some don't have identified freshwater species at all
-# so this errors
-
-# Salt_or_Fresh <- dat_long %>% 
-#     summarize(.by = c(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_or_Fresh),
-#               Cover = sum(Cover, na.rm = TRUE)) %>% 
-#     pivot_wider(names_from = Salt_or_Fresh,
-#                 values_from = Cover) %>% 
-#     mutate(Salt_to_Fresh = Salt / Fresh) %>% 
-#     select(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_to_Fresh)
-# dat <- left_join(dat, Salt_or_Fresh)
-# dat_grouped <- left_join(dat_grouped, Salt_or_Fresh)
-# rm(Salt_or_Fresh)
+Salt_to_Total <- dat_long %>%
+    summarize(.by = c(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_or_Fresh),
+              Cover = sum(Cover, na.rm = TRUE)) %>%
+    pivot_wider(names_from = Salt_or_Fresh,
+                values_from = Cover) %>%
+    mutate(Total_Live = live_totals,
+           Salt_to_Total = case_when(Total_Live == 0 ~ NA_real_,
+                                     .default = Salt / Total_Live)) %>%
+    select(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Salt_to_Total)
+dat <- left_join(dat, Salt_to_Total)
+dat_grouped <- left_join(dat_grouped, Salt_to_Total)
+rm(Salt_to_Total)
 
 Unveg_to_veg <- dat_long %>% 
     summarize(.by = c(Year, Month, Day, Reserve, SiteID, TransectID, PlotID, Cover_Categories),
