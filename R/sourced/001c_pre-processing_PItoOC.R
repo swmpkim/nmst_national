@@ -29,8 +29,8 @@ dat_to100pts <- dat_to_convert %>%
 # apply regression/morphological correction factor
 # need to connect species to archetypes first
 morph_toJoin <- morph_dat %>% 
-    select(species = "Species/Cover",
-           Morphology = "Morphological archetype") %>% 
+    select(species = "Species.name",
+           Morphology = "Morphological Type") %>% 
     left_join(morph_conv) %>% 
     distinct()
 

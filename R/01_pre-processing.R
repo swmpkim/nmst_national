@@ -16,7 +16,7 @@ reserves <- stringr::str_sub(dir(path, pattern = "_veg.xlsx$"), end = -10)
 source(here::here("R", "sourced", "functions_natl.R"))
 
 # get set up for PI-vs-OC processing paths
-source(here::here("R", "sourced", "001c_setup-for-PI-or-OC.R"))
+source(here::here("R", "sourced", "001b_setup-for-PI-or-OC.R"))
 
 
 
