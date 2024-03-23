@@ -27,8 +27,10 @@ if(pi_reserve){
 if("F_Record" %in% names(dat)) dat$F_Record <- NULL
 
 stn_tbl <- get_stn_table(file_dat)
-stn_tbl <- stn_tbl %>% 
-    mutate(PlotID_full = paste(SiteID, TransectID, PlotID, sep = "-"))
+stn_tbl <- stn_tbl %>%
+    mutate(PlotID_full = paste(SiteID, TransectID, PlotID, sep = "-")) %>% 
+    select(-Type) %>%    # at least one file has multiple rows per plot based on different types
+    distinct()
 eis <- get_ecotone_invaders(file = file_specs)
 
 # remove vegetation zones from eis data frame that don't appear in the station table
