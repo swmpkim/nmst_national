@@ -37,6 +37,7 @@ zone_metrics <- veg %>%
                                     "M-Mudflat" ~ "Low",
                                     "S-Seaward Edge" ~ "Low",
                                     "L-Low Marsh" ~ "Low",
+                                    "P-Pools/Pannes" ~ "Low",
                                     "T-Transition" ~ "Mid",
                                     "H-High Marsh" ~ "Mid",
                                     "UE-Upland Edge" ~ "Up",
@@ -46,8 +47,7 @@ zone_metrics <- veg %>%
     summarize(.by = c(Reserve, SiteID),
               proportion_low = sum(zone_coarse == "Low")/n(),
               proportion_midToHigh = sum(zone_coarse == "Mid")/n(),
-              proportion_uplandOrFresh = sum(zone_coarse == "Up")/n(),
-              proportion_other = sum(zone_coarse == "Other")/n())
+              proportion_uplandOrFresh = sum(zone_coarse == "Up")/n())
 
 # make sure all add up to 1
 unique(rowSums(zone_metrics[3:ncol(zone_metrics)]))
@@ -139,6 +139,38 @@ slopes_expl_wide <- slopes_expl_long %>%
 
 # join all ----
 # veg slopes, explanatory without time, explanatory slopes, veg zone proportions
+names(time_component_no) <- stringr::str_replace_all(names(time_component_no),
+                                                     " ",
+                                                     "_")
+fake_SET_data <- rnorm(n = nrow(time_component_no),
+                       mean = 3,
+                       sd = 5)
+
+expl_noTime_toJoin <- time_component_no %>% 
+    select(Reserve, SiteID,
+           Geomorphology,
+           Tidal_Range,
+           Salinity_category,
+           SLR_since_1970 = SLR_rate_since_1970,
+           SLR_last19yrs = `Local_linear_water_level_change_rate_-_19-yr_rate`,
+           Latitude:NERRs_Landscape_Pct_MUC_below_MHHW,
+           Crtieria_for_site_not_met) %>% 
+    mutate(SET_change_FAKE = fake_SET_data)
+
+names(slopes_by_site)[3:ncol(slopes_by_site)] <- paste0(names(slopes_by_site)[3:ncol(slopes_by_site)],
+                                                        "_slope")
+names(slopes_expl_wide)[2:4] <- paste0(names(slopes_expl_wide)[2:4], 
+                                       "_slope")
+
+slopesAndExpl_bySite <- left_join(slopes_by_site,
+                                  slopes_expl_wide,
+                                  by = "Reserve") %>% 
+    left_join(expl_noTime_toJoin,
+              by = c("Reserve", "SiteID")) %>% 
+    left_join(zone_metrics,
+              by = c("Reserve", "SiteID"))
+saveRDS(slopesAndExpl_bySite,
+        file = here::here("data", "compiled", "slopesAndExpl_bySite.rds"))
 
 
 
