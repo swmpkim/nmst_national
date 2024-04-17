@@ -46,6 +46,7 @@ time_component_yes <- time_component_yes %>%
 rm(ace2)
 
 
+
 # average time-based components to reserve level  
 time_based_avgs <- time_component_yes %>% 
     summarize(.by = Reserve,
@@ -58,16 +59,15 @@ time_based_avgs <- time_component_yes %>%
 veg <- read.csv(here::here("data", "compiled",
                            "ALL_veg-grouped.csv"))
 
-
-
 # join into one data frame 
 veg_and_expl <- left_join(veg, time_component_no, by = c("Reserve", "SiteID")) %>% 
     left_join(time_component_yes, by = c("Reserve", "Year"))
 
-
 # write out RData file with the data frames separate (but joinable)  
 save(veg, time_component_no, time_component_yes, time_based_avgs,
      file = here::here("data", "compiled", "veg_and_expl_dfs.RData"))
+
+# AFTER THIS POINT, TRANSITION TO NATIONAL SLOPE DF CONSTRUCTION.R
 
 # write out joined csv  
 write.csv(veg_and_expl,
