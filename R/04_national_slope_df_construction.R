@@ -248,11 +248,11 @@ slopesAndExpl_byZone <- left_join(slopes_by_zone,
                                   by = "Reserve") %>% 
     left_join(expl_noTime_toJoin,
               by = c("Reserve", "SiteID")) %>% 
-    left_join(zone_metrics,
-               by = c("Reserve", "SiteID", 
-                      "Vegetation_Zone" = "zone_coarse")) %>% 
     left_join(site_metrics,
-              by = c("Reserve", "SiteID"))
+              by = c("Reserve", "SiteID")) %>% 
+    left_join(zone_metrics,
+              by = c("Reserve", "SiteID", 
+                     "Vegetation_Zone" = "zone_coarse"))
 
 
 # to slopes by plot ----
@@ -261,10 +261,10 @@ slopesAndExpl_byPlot <- left_join(slopes_by_plot,
                                   by = "Reserve") %>% 
     left_join(expl_noTime_toJoin,
               by = c("Reserve", "SiteID")) %>% 
-    left_join(plot_metrics,
-              by = c("Reserve", "SiteID", "TransectID", "PlotID")) %>% 
     left_join(site_metrics,
-              by = c("Reserve", "SiteID"))
+              by = c("Reserve", "SiteID")) %>% 
+    left_join(plot_metrics,
+              by = c("Reserve", "SiteID", "TransectID", "PlotID"))
 
 # save ----
 save(slopesAndExpl_byPlot,
