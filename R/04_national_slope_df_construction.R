@@ -30,8 +30,10 @@ veg <- veg %>%
 # add metric of proportion of site low vs. mid/high
 
 # generate % low zone metrics  ----  
-zone_metrics <- veg %>% 
-    select(Reserve, SiteID, Vegetation_Zone, TransectID, PlotID) %>% 
+# and other things that should be averaged by site
+site_metrics <- veg %>% 
+    select(Reserve, SiteID, Vegetation_Zone, TransectID, PlotID,
+           Orthometric_Height, Distance_to_Water) %>% 
     distinct() %>% 
     mutate(zone_coarse = case_match(Vegetation_Zone,
                                     "M-Mudflat" ~ "Low",
@@ -47,10 +49,38 @@ zone_metrics <- veg %>%
     summarize(.by = c(Reserve, SiteID),
               proportion_low = sum(zone_coarse == "Low")/n(),
               proportion_midToHigh = sum(zone_coarse == "Mid")/n(),
-              proportion_uplandOrFresh = sum(zone_coarse == "Up")/n())
+              proportion_uplandOrFresh = sum(zone_coarse == "Up")/n(),
+              siteAvg_distance_to_water = mean(Distance_to_Water, na.rm = TRUE),
+              siteAvg_orthometric_height = mean(Orthometric_Height, na.rm = TRUE))
+
+zone_metrics <- veg %>% 
+    select(Reserve, SiteID, Vegetation_Zone, TransectID, PlotID,
+           Orthometric_Height, Distance_to_Water) %>% 
+    distinct() %>% 
+    mutate(zone_coarse = case_match(Vegetation_Zone,
+                                    "M-Mudflat" ~ "Low",
+                                    "S-Seaward Edge" ~ "Low",
+                                    "L-Low Marsh" ~ "Low",
+                                    "P-Pools/Pannes" ~ "Low",
+                                    "T-Transition" ~ "Mid",
+                                    "H-High Marsh" ~ "Mid",
+                                    "UE-Upland Edge" ~ "Up",
+                                    "FT-Freshwater Tidal" ~ "Up",
+                                    "U-Upland" ~ "Up",
+                                    .default = "Other")) %>% 
+    summarize(.by = c(Reserve, SiteID, zone_coarse),
+              zoneAvg_distance_to_water = mean(Distance_to_Water, na.rm = TRUE),
+              zoneAvg_orthometric_height = mean(Orthometric_Height, na.rm = TRUE))
+
+
+plot_metrics <- veg %>% 
+    select(Reserve, SiteID, TransectID, PlotID,
+           plotOrthometric_height = Orthometric_Height, 
+           plotDistance_to_water = Distance_to_Water) %>% 
+    distinct()
 
 # make sure all add up to 1
-unique(rowSums(zone_metrics[3:ncol(zone_metrics)]))
+unique(rowSums(site_metrics[3:5]))
 
 # veg slopes ----  
 # pivot longer then nest
@@ -186,7 +216,8 @@ expl_noTime_toJoin <- time_component_no %>%
            SLR_last19yrs = `Local_linear_water_level_change_rate_-_19-yr_rate`,
            Latitude:NERRs_Landscape_Pct_MUC_below_MHHW,
            Crtieria_for_site_not_met) %>% 
-    mutate(SET_change_FAKE = fake_SET_data)
+    mutate(SET_change_FAKE = fake_SET_data,
+           SET_deficit = SLR_since_1970 - SET_change_FAKE)
 
 # put 'slope' in column names ----
 names(slopes_by_plot)[5:ncol(slopes_by_plot)] <- paste0(names(slopes_by_plot)[5:ncol(slopes_by_plot)],
@@ -206,7 +237,7 @@ slopesAndExpl_bySite <- left_join(slopes_by_site,
                                   by = "Reserve") %>% 
     left_join(expl_noTime_toJoin,
               by = c("Reserve", "SiteID")) %>% 
-    left_join(zone_metrics,
+    left_join(site_metrics,
               by = c("Reserve", "SiteID"))
 
 # to slopes by zone ----
@@ -218,6 +249,9 @@ slopesAndExpl_byZone <- left_join(slopes_by_zone,
     left_join(expl_noTime_toJoin,
               by = c("Reserve", "SiteID")) %>% 
     left_join(zone_metrics,
+               by = c("Reserve", "SiteID", 
+                      "Vegetation_Zone" = "zone_coarse")) %>% 
+    left_join(site_metrics,
               by = c("Reserve", "SiteID"))
 
 
@@ -227,14 +261,16 @@ slopesAndExpl_byPlot <- left_join(slopes_by_plot,
                                   by = "Reserve") %>% 
     left_join(expl_noTime_toJoin,
               by = c("Reserve", "SiteID")) %>% 
-    left_join(zone_metrics,
+    left_join(plot_metrics,
+              by = c("Reserve", "SiteID", "TransectID", "PlotID")) %>% 
+    left_join(site_metrics,
               by = c("Reserve", "SiteID"))
 
 # save ----
 save(slopesAndExpl_byPlot,
      slopesAndExpl_bySite,
      slopesAndExpl_byZone,
-     file = here::here("slopesAndExpl_dfs.RData"))
+     file = here::here("data", "compiled", "slopesAndExpl_dfs.RData"))
 write.csv(slopesAndExpl_byPlot,
           here::here("data", "compiled", "slopesAndExpl_byPlot.csv"),
           na = "",
