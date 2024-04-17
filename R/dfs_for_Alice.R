@@ -2,12 +2,57 @@ library(tidyverse)
 
 load(here::here("data", "compiled", "veg_and_expl_dfs.RData"))
 
+# reserve name matching ----
+# veg/slopes_by_site don't have the suffixes
+# explanatory variables do have suffixes in reserve name
+resStMatching <- time_component_no %>% 
+    select(File = Reserve, 
+           SiteID) %>% 
+    separate(File, into = c("Res", "St"),
+             remove = FALSE,
+             fill = "right") %>% 
+    select(-St)
 
+veg <- veg %>% 
+    left_join(resStMatching, by = c("Reserve" = "Res",
+                                    "SiteID")) %>% 
+    relocate(File) %>% 
+    mutate(Reserve2 = case_when(is.na(File) ~ Reserve,
+                                File != Reserve ~ File,
+                                .default = Reserve)) %>% 
+    relocate(Reserve2) %>% 
+    select(-File, -Reserve) %>% 
+    rename(Reserve = Reserve2)
 
+# calculations ----
 # need to calculate slopes by plot
 # then average up to site and/or zone
 # add metric of proportion of site low vs. mid/high
 
+# generate % low zone metrics  ----  
+zone_metrics <- veg %>% 
+    select(Reserve, SiteID, Vegetation_Zone, TransectID, PlotID) %>% 
+    distinct() %>% 
+    mutate(zone_coarse = case_match(Vegetation_Zone,
+                                    "M-Mudflat" ~ "Low",
+                                    "S-Seaward Edge" ~ "Low",
+                                    "L-Low Marsh" ~ "Low",
+                                    "T-Transition" ~ "Mid",
+                                    "H-High Marsh" ~ "Mid",
+                                    "UE-Upland Edge" ~ "Up",
+                                    "FT-Freshwater Tidal" ~ "Up",
+                                    "U-Upland" ~ "Up",
+                                    .default = "Other")) %>% 
+    summarize(.by = c(Reserve, SiteID),
+              proportion_low = sum(zone_coarse == "Low")/n(),
+              proportion_midToHigh = sum(zone_coarse == "Mid")/n(),
+              proportion_uplandOrFresh = sum(zone_coarse == "Up")/n(),
+              proportion_other = sum(zone_coarse == "Other")/n())
+
+# make sure all add up to 1
+unique(rowSums(zone_metrics[3:ncol(zone_metrics)]))
+
+# veg slopes ----  
 # pivot longer then nest
 veg_long_nested <- veg %>% 
     mutate(ResStTrnsPlt = paste(Reserve, SiteID, TransectID, PlotID, sep = "_"),
@@ -56,11 +101,48 @@ slopes_by_site <- slopes_wide %>%
               across(everything(),
                      function(x) mean(x, na.rm = TRUE)))
 
+# explanatory slopes ----
+nested_explanatory <- time_component_yes %>% 
+    select(Reserve, 
+           Year,
+           tide_range = "Local tidal range",
+           temp_avg = "Climate - temp avg",
+           precip_sum = "Climate - precip sum (avg)") %>% 
+    pivot_longer(tide_range:precip_sum,
+                 names_to = "response",
+                 values_to = "value") %>% 
+    group_by(Reserve, response) %>% 
+    nest()
+
+# write a function to run models
+model_change_expl <- function(df){
+    lm(value ~ Year, data = df)
+}
+model_change_expl2 <- possibly(model_change_expl, otherwise = NA)
+
+# run models
+slopes_explanatory <- nested_explanatory %>% 
+    mutate(model = map(data, model_change_expl2)) 
+
+# pull out slopes
+slopes_expl_long <- slopes_explanatory %>% 
+    select(Reserve, response, model) %>% 
+    mutate(tidy = map(model, broom::tidy)) %>% 
+    unnest(tidy) %>% 
+    filter(term == "Year")
+
+slopes_expl_wide <- slopes_expl_long %>% 
+    select(Reserve, response, estimate) %>% 
+    pivot_wider(names_from = response,
+                values_from = estimate)
 
 
-# need slopes (?) for explanatory factors by site as well
+# join all ----
+# veg slopes, explanatory without time, explanatory slopes, veg zone proportions
 
 
+
+# BEWARE! insert random normal variable for SET change  ----
 
 
 
