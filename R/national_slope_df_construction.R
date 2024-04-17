@@ -87,7 +87,7 @@ slopes_long <- veg_long_nested %>%
     unnest(tidy) %>% 
     filter(term == "date")
 
-slopes_wide <- slopes_long %>% 
+slopes_by_plot <- slopes_long %>% 
     select(ResStTrnsPlt, response, estimate) %>% 
     separate(ResStTrnsPlt, 
              into = c("Reserve", "SiteID", "TransectID", "PlotID"),
@@ -95,7 +95,7 @@ slopes_wide <- slopes_long %>%
     pivot_wider(names_from = response,
                 values_from = estimate)
 
-slopes_by_site <- slopes_wide %>% 
+slopes_by_site <- slopes_by_plot %>% 
     select(-TransectID, -PlotID) %>% 
     summarize(.by = c(Reserve, SiteID),
               across(everything(),
@@ -136,9 +136,40 @@ slopes_expl_wide <- slopes_expl_long %>%
     pivot_wider(names_from = response,
                 values_from = estimate)
 
+# by zone ----
+# retrieve zone by plot from veg df
+zones_by_plot <- veg %>% 
+    select(Reserve, SiteID, TransectID, PlotID, Vegetation_Zone) %>% 
+    distinct() %>% 
+    mutate(zone_coarse = case_match(Vegetation_Zone,
+                                    "M-Mudflat" ~ "Low",
+                                    "S-Seaward Edge" ~ "Low",
+                                    "L-Low Marsh" ~ "Low",
+                                    "P-Pools/Pannes" ~ "Low",
+                                    "T-Transition" ~ "Mid",
+                                    "H-High Marsh" ~ "Mid",
+                                    "UE-Upland Edge" ~ "Up",
+                                    "FT-Freshwater Tidal" ~ "Up",
+                                    "U-Upland" ~ "Up",
+                                    .default = "Other"))
+# check
+janitor::get_dupes(zones_by_plot, Reserve, SiteID, TransectID, PlotID)
+
+# calculate
+# have to keep site to join SET rates etc.
+slopes_by_zone <- slopes_by_plot %>% 
+    left_join(zones_by_plot) %>% 
+    relocate(c(Vegetation_Zone, zone_coarse)) %>% 
+    select(-TransectID, -PlotID, -Vegetation_Zone) %>% 
+    rename(Vegetation_Zone = zone_coarse) %>% 
+    summarize(.by = c(Reserve, SiteID, Vegetation_Zone),
+              across(everything(),
+                     function(x) mean(x, na.rm = TRUE)))
+    
+
 
 # join all ----
-# veg slopes, explanatory without time, explanatory slopes, veg zone proportions
+# prep dfs ----
 names(time_component_no) <- stringr::str_replace_all(names(time_component_no),
                                                      " ",
                                                      "_")
@@ -157,11 +188,19 @@ expl_noTime_toJoin <- time_component_no %>%
            Crtieria_for_site_not_met) %>% 
     mutate(SET_change_FAKE = fake_SET_data)
 
+# put 'slope' in column names ----
+names(slopes_by_plot)[5:ncol(slopes_by_plot)] <- paste0(names(slopes_by_plot)[5:ncol(slopes_by_plot)],
+                                                        "_slope")
 names(slopes_by_site)[3:ncol(slopes_by_site)] <- paste0(names(slopes_by_site)[3:ncol(slopes_by_site)],
+                                                        "_slope")
+names(slopes_by_zone)[4:ncol(slopes_by_zone)] <- paste0(names(slopes_by_zone)[4:ncol(slopes_by_zone)],
                                                         "_slope")
 names(slopes_expl_wide)[2:4] <- paste0(names(slopes_expl_wide)[2:4], 
                                        "_slope")
 
+
+#  to slopes by site ----
+# veg slopes, explanatory without time, explanatory slopes, veg zone proportions
 slopesAndExpl_bySite <- left_join(slopes_by_site,
                                   slopes_expl_wide,
                                   by = "Reserve") %>% 
@@ -169,13 +208,45 @@ slopesAndExpl_bySite <- left_join(slopes_by_site,
               by = c("Reserve", "SiteID")) %>% 
     left_join(zone_metrics,
               by = c("Reserve", "SiteID"))
-saveRDS(slopesAndExpl_bySite,
-        file = here::here("data", "compiled", "slopesAndExpl_bySite.rds"))
+
+# to slopes by zone ----
+# keeping zone metrics in case it matters, that a Site-Zone is in a site 
+# with mostly the same zone vs. mostly other zones
+slopesAndExpl_byZone <- left_join(slopes_by_zone,
+                                  slopes_expl_wide,
+                                  by = "Reserve") %>% 
+    left_join(expl_noTime_toJoin,
+              by = c("Reserve", "SiteID")) %>% 
+    left_join(zone_metrics,
+              by = c("Reserve", "SiteID"))
 
 
+# to slopes by plot ----
+slopesAndExpl_byPlot <- left_join(slopes_by_plot,
+                                  slopes_expl_wide,
+                                  by = "Reserve") %>% 
+    left_join(expl_noTime_toJoin,
+              by = c("Reserve", "SiteID")) %>% 
+    left_join(zone_metrics,
+              by = c("Reserve", "SiteID"))
 
-# BEWARE! insert random normal variable for SET change  ----
-
+# save ----
+save(slopesAndExpl_byPlot,
+     slopesAndExpl_bySite,
+     slopesAndExpl_byZone,
+     file = here::here("slopesAndExpl_dfs.RData"))
+write.csv(slopesAndExpl_byPlot,
+          here::here("data", "compiled", "slopesAndExpl_byPlot.csv"),
+          na = "",
+          row.names = FALSE)
+write.csv(slopesAndExpl_bySite,
+          here::here("data", "compiled", "slopesAndExpl_bySite.csv"),
+          na = "",
+          row.names = FALSE)
+write.csv(slopesAndExpl_byZone,
+          here::here("data", "compiled", "slopesAndExpl_byZone.csv"),
+          na = "",
+          row.names = FALSE)
 
 
 
