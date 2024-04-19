@@ -60,7 +60,7 @@ key_species <- c("Spartina.alterniflora",
                  "Distichlis.spicata",
                  "Sarcocornia.perennis",
                  "Carex.lyngbyei",
-                 "Carex.stricta",
+                 # "Carex.stricta",
                  "Panicum.repens",
                  # "Sagittaria.graminea",
                  "Bidens.mitis",
@@ -70,6 +70,7 @@ key_species <- c("Spartina.alterniflora",
 
 
 ```{r}
+set.seed(123)
 mds_spp <- metaMDS(dat_spp_pa[, 3:ncol(dat_spp_pa)], k = 3, trace = 0)
 
 spp_spscores <- as.data.frame(scores(mds_spp)$species) %>% 
@@ -82,12 +83,12 @@ spp_sp_key <- spp_spscores %>%
     filter(species %in% key_species)
 spp_sitescores <- as.data.frame(scores(mds_spp)$sites) %>% 
     mutate(Reserve = dat_spp_pa$Reserve,
-           region = case_when(Reserve %in% c("GRB", "WEL", "WQB", "HUD-PIER", "HUD-TIV", "NAR") ~ "New England",
+           RsSt = paste(dat_spp_pa$Reserve, dat_spp_pa$SiteID),
+           region = case_when(Reserve %in% c("GRB", "WEL", "WQB", "NAR") ~ "New England",
                               Reserve %in% c("APA", "GND", "MAR") ~ "Gulf of Mexico",
-                              Reserve %in% c("CBM", "CBV", "DEL-BCR", "DEL-SJR", "JAC") ~ "Mid-Atlantic",
+                              Reserve %in% c("CBM", "CBV", "DEL-BCR", "DEL-SJR", "HUD-PIER", "HUD-TIV", "JAC") ~ "Mid-Atlantic",
                               Reserve %in% c("ACE", "NIW", "NOC", "GTM") ~ "Southeast",
-                              Reserve %in% c("KAC") ~ "Alaska",
-                              Reserve %in% c("SOS", "ELK", "TJR") ~ "West Coast",
+                              Reserve %in% c("SOS", "ELK", "TJR", "KAC") ~ "West Coast",
                               .default = "Kim missed one"))
 ```
 
@@ -103,7 +104,7 @@ p <- ggplot(spp_sitescores, aes(x = NMDS1, y = NMDS2)) +
     geom_segment(data = spp_sp_key,
                  aes(x = 0, y = 0, xend = NMDS1*0.9, yend = NMDS2*0.9),
                  col = "red3") +
-    geom_point_interactive(aes(col = region, tooltip = Reserve),
+    geom_point_interactive(aes(col = region, tooltip = RsSt),
                            size = 2) +
     geom_text(data = spp_sp_key,
               aes(x = NMDS1, y = NMDS2, label = species),
@@ -121,6 +122,7 @@ girafe(ggobj = p)
 
 
 ```{r}
+set.seed(123)
 mds_grp <- metaMDS(dat_grouped_pa[, 3:ncol(dat_grouped_pa)], trace = 0)
 
 grp_spscores <- as.data.frame(scores(mds_grp)$species) %>% 
@@ -131,12 +133,12 @@ grp_sp_top <- grp_spscores %>%
     head(30)
 grp_sitescores <- as.data.frame(scores(mds_grp)$sites) %>% 
     mutate(Reserve = dat_grouped_pa$Reserve,
-           region = case_when(Reserve %in% c("GRB", "WEL", "WQB", "HUD-PIER", "HUD-TIV", "NAR") ~ "New England",
+           RsSt = paste(dat_spp_pa$Reserve, dat_spp_pa$SiteID),
+           region = case_when(Reserve %in% c("GRB", "WEL", "WQB", "NAR") ~ "New England",
                               Reserve %in% c("APA", "GND", "MAR") ~ "Gulf of Mexico",
-                              Reserve %in% c("CBM", "CBV", "DEL-BCR", "DEL-SJR", "JAC") ~ "Mid-Atlantic",
+                              Reserve %in% c("CBM", "CBV", "DEL-BCR", "DEL-SJR", "HUD-PIER", "HUD-TIV", "JAC") ~ "Mid-Atlantic",
                               Reserve %in% c("ACE", "NIW", "NOC", "GTM") ~ "Southeast",
-                              Reserve %in% c("KAC") ~ "Alaska",
-                              Reserve %in% c("SOS", "ELK", "TJR") ~ "West Coast",
+                              Reserve %in% c("SOS", "ELK", "TJR", "KAC") ~ "West Coast",
                               .default = "Kim missed one"))
 ```
 
@@ -147,7 +149,7 @@ p <- ggplot(grp_sitescores, aes(x = NMDS1, y = NMDS2)) +
                  col = "gray") +
     geom_point_interactive(data = grp_sitescores, aes(x = NMDS1, y = NMDS2, 
                                                       col = region,
-                                                      tooltip = Reserve),
+                                                      tooltip = RsSt),
                            size = 2) +
     geom_text(data = grp_spscores,
                  aes(x = NMDS1, y = NMDS2, label = species),

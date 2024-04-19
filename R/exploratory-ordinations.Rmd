@@ -1,0 +1,226 @@
+---
+title: "Ordinations"
+date: "`r Sys.Date()`"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      error = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(vegan)
+library(lme4)
+library(emmeans)
+```
+
+
+Exploring Ordination possibilities to see whether the analysis plan will work.  
+
+
+There are definitely some outlier values in this dataset. Those may go away when we reduce according to the flow chart in the analysis plan - should do that and then check again.  
+
+```{r}
+load(here::here("data", "compiled", "slopesAndExpl_dfs.RData"))
+```
+
+# By Plot  
+
+```{r}
+plot_forOrd <- slopesAndExpl_byPlot %>% 
+    mutate(RsStTrPl = paste(Reserve, SiteID, TransectID, PlotID,
+                            sep = "_")) %>% 
+    column_to_rownames("RsStTrPl")
+
+plot_resp <- plot_forOrd %>% 
+    select(Total.unvegetated_slope:Wood_slope)
+
+plot_expl <- plot_forOrd %>% 
+    select(-any_of(names(plot_resp)))
+```
+
+Do we have generally normal slopes, which would be great for PCA? What do our response slopes look like?  
+
+```{r}
+skimr::skim(plot_resp)
+```
+
+
+```{r}
+plot_long <- plot_resp %>% 
+    rownames_to_column("RsStTrPl") %>% 
+    pivot_longer(-RsStTrPl,
+                 names_to = "response",
+                 values_to = "value")
+
+ggplot(plot_long, aes(x = value,
+                      fill = response)) +
+    geom_histogram(bins = 30, col = "gray40") +
+    scale_x_log10() +
+    geom_vline(xintercept = 1e-13) +
+    facet_wrap(~response, nrow = 5) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    labs(subtitle = "NOTE log-10 x-axis")
+```
+
+With a log transformation it wouldn't look too bad, but there are some pretty giant outliers.  
+
+
+# By Zone (within site)  
+
+
+
+# By Site  
+
+```{r}
+site_forOrd <- slopesAndExpl_bySite %>% 
+    mutate(RsSt = paste(Reserve, SiteID,
+                            sep = "_")) %>% 
+    column_to_rownames("RsSt")
+
+site_resp <- site_forOrd %>% 
+    select(Total.unvegetated_slope:Wood_slope)
+
+site_expl <- site_forOrd %>% 
+    select(-any_of(names(site_resp)))
+
+skimr::skim(site_resp)
+
+site_long <- site_resp %>% 
+    rownames_to_column("RsSt") %>% 
+    pivot_longer(-RsSt,
+                 names_to = "response",
+                 values_to = "value")
+
+ggplot(site_long, aes(x = value,
+                      fill = response)) +
+    geom_histogram(bins = 30, col = "gray40") +
+    scale_x_log10() +
+    geom_vline(xintercept = 1e-13) +
+    facet_wrap(~response, nrow = 5) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    labs(subtitle = "NOTE log-10 x-axis")
+```
+
+# Slopes ~ explanatory vars  
+
+## plot-level  
+
+```{r}
+# probably need to do this for each vegetation zone
+# which means I need zone in the data frame
+plot_forLMM <- plot_forOrd %>% 
+    select(Reserve:PlotID,
+           Total.live.veg_slope,
+           Total.unvegetated_slope,
+           H.Halophyte_slope,
+           EIR_slope,
+           Richness_slope,
+           SWdiv_slope,
+           Unveg_to_veg_slope,
+           Geomorphology,
+           Tidal_Range,
+           Salinity_category,
+           NERR_Region,
+           Region) %>% 
+    mutate(Plot_full = paste(TransectID, PlotID, sep = "_"))
+
+preds <- paste(names(plot_forLMM)[12:15], collapse = " + ")
+form_rs <- paste(preds, " + (1|Reserve)")
+
+fo <- paste0("Total.live.veg_slope ~ ", form_rs)
+mod <- lmer(as.formula(fo),
+            data = plot_forLMM)
+
+emmeans(mod, ~NERR_Region)
+emmeans(mod, ~Geomorphology)
+emmeans(mod, ~Tidal_Range)
+emmeans(mod, ~Salinity_category, by = "NERR_Region") # would really want this to be by = "Vegetation_Zone" - it splits the tables up nicely
+```
+
+## zone (within site) level  
+
+```{r}
+# probably need to do this for each vegetation zone
+# which means I need zone in the data frame
+zone_forLMM <- slopesAndExpl_byZone %>% 
+    select(Reserve:Vegetation_Zone,
+           Total.live.veg_slope,
+           Total.unvegetated_slope,
+           H.Halophyte_slope,
+           EIR_slope,
+           Richness_slope,
+           SWdiv_slope,
+           Unveg_to_veg_slope,
+           Geomorphology,
+           Tidal_Range,
+           Salinity_category,
+           NERR_Region,
+           Region) 
+
+preds <- paste(names(zone_forLMM)[11:14], collapse = " + ")
+form_rs <- paste(preds, " + Vegetation_Zone + (1|Reserve)")
+
+fo <- paste0("EIR_slope ~ ", form_rs)
+mod <- lmer(as.formula(fo),
+            data = zone_forLMM)
+
+emmeans(mod, ~NERR_Region, by = "Vegetation_Zone")
+emmeans(mod, ~Geomorphology, by = "Vegetation_Zone")
+emmeans(mod, ~Tidal_Range, by = "Vegetation_Zone")
+emmeans(mod, ~Salinity_category, by = "Vegetation_Zone") 
+emmeans(mod, ~NERR_Region*Salinity_category, by = "Vegetation_Zone") 
+
+emmip(mod, ~NERR_Region*Vegetation_Zone,
+      CIs = TRUE)
+emdf1 <- emmip(mod, ~NERR_Region*Vegetation_Zone,
+      CIs = TRUE, plotit = FALSE)
+ggplot(emdf1, aes(x = NERR_Region,
+                  y = yvar,
+                  col = NERR_Region)) +
+    geom_hline(yintercept = 0,
+               col = "gray40") +
+    geom_pointrange(aes(ymin = LCL,
+                        ymax = UCL),
+                    linewidth = 0.8) +
+    facet_wrap(~Vegetation_Zone, ncol = 1) +
+    theme_bw() +
+    scale_color_brewer(palette = "Set1") +
+    theme(legend.position = "none") +
+    labs(title = "EIR slopes by vegetation zone",
+         y = "change in EIR/year",
+         x = "Region")
+
+# what about throwing that on top of the raw data????
+ggplot() +
+    geom_jitter(data = zone_forLMM,
+                aes(x = NERR_Region,
+                    y = EIR_slope),
+                color = "gray") +
+    geom_hline(yintercept = 0) +
+    geom_pointrange(data = emdf1,
+                    aes(x = NERR_Region,
+                        y = yvar,
+                        ymin = LCL,
+                        ymax = UCL,
+                        col = NERR_Region),
+                    linewidth = 0.8) +
+    facet_wrap(~Vegetation_Zone, ncol = 1) +
+    theme_bw() +
+    scale_color_brewer(palette = "Set1") +
+    theme(legend.position = "none") +
+    labs(title = "EIR slopes by vegetation zone",
+         y = "change in EIR/year",
+         x = "Region")
+
+# should we just do a loop and get average and SE/CIs of each slope by zone*whatever other explanatory var???
+```

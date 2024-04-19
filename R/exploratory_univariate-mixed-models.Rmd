@@ -1,0 +1,168 @@
+---
+title: ""
+date: "`r Sys.Date()`"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+        code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      error = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(multcomp)
+library(multcompView)
+
+load(here::here("data", "compiled", "veg_and_expl_dfs.RData"))
+```
+
+```{r}
+
+# reserve name matching ----
+# veg/slopes_by_site don't have the suffixes
+# explanatory variables do have suffixes in reserve name
+resStMatching <- time_component_no %>% 
+    select(File = Reserve, 
+           SiteID) %>% 
+    separate(File, into = c("Res", "St"),
+             remove = FALSE,
+             fill = "right") %>% 
+    select(-St)
+
+veg <- veg %>% 
+    left_join(resStMatching, by = c("Reserve" = "Res",
+                                    "SiteID")) %>% 
+    relocate(File) %>% 
+    mutate(Reserve2 = case_when(is.na(File) ~ Reserve,
+                                File != Reserve ~ File,
+                                .default = Reserve)) %>% 
+    relocate(Reserve2) %>% 
+    select(-File, -Reserve) %>% 
+    rename(Reserve = Reserve2)
+
+names(time_component_no) <- stringr::str_replace_all(names(time_component_no),
+                                                     " ",
+                                                     "_")
+fake_SET_data <- rnorm(n = nrow(time_component_no),
+                       mean = 3,
+                       sd = 5)
+
+expl_noTime_toJoin <- time_component_no %>% 
+    select(Reserve, SiteID,
+           Geomorphology,
+           Tidal_Range,
+           Salinity_category,
+           SLR_since_1970 = SLR_rate_since_1970,
+           SLR_last19yrs = `Local_linear_water_level_change_rate_-_19-yr_rate`,
+           Latitude:NERRs_Landscape_Pct_MUC_below_MHHW,
+           Crtieria_for_site_not_met) %>% 
+    mutate(SET_change_FAKE = fake_SET_data,
+           SET_deficit = SLR_since_1970 - SET_change_FAKE)
+
+vegAndExpl <- veg %>% 
+    mutate(zone_coarse = case_match(Vegetation_Zone,
+                                    "M-Mudflat" ~ "Low",
+                                    "S-Seaward Edge" ~ "Low",
+                                    "L-Low Marsh" ~ "Low",
+                                    "P-Pools/Pannes" ~ "Low",
+                                    "T-Transition" ~ "Mid",
+                                    "H-High Marsh" ~ "Mid",
+                                    "UE-Upland Edge" ~ "Up",
+                                    "FT-Freshwater Tidal" ~ "Up",
+                                    "U-Upland" ~ "Up",
+                                    .default = "Other")) %>% 
+    left_join(expl_noTime_toJoin,
+              by = c("Reserve", "SiteID")) 
+```
+
+```{r}
+# set global emm options so degrees of freedom can be estimated
+# set to 20049 or higher, and change graph code to lower.CL and upper.CL from the asymp versions
+# this slows down emtrends etc.
+# by a LOT
+emm_options(lmerTest.limit = 1000,
+            pbkrtest.limit = 1000)
+
+# uniquely identify plots
+vegAndExpl$PlotIDFull <- with(vegAndExpl, paste(SiteID, TransectID, PlotID))
+
+# model
+mod1 <- lmer(EIR ~ Year*(Geomorphology + Tidal_Range +
+                                         Salinity_category + zone_coarse +
+                                         NERR_Region) +
+                 (1|Reserve/PlotIDFull),
+             data = vegAndExpl)
+
+# peek
+summary(mod1)
+anova(mod1)
+
+# get trends by region
+trendsdf <- emtrends(mod1, ~NERR_Region, "Year")
+# pairwise contrasts
+contrast(trendsdf, method = "pairwise")
+
+mod_cld <- cld(trendsdf, Letters = letters) %>% 
+    mutate(.group = str_trim(.group))
+
+# plot
+ggplot(mod_cld, aes(x = NERR_Region,
+                    y = Year.trend,
+                    col = NERR_Region,
+                    label = .group,)) +
+    geom_hline(yintercept = 0,
+               col = "gray40") +
+    geom_pointrange(aes(ymin = asymp.LCL,
+                        ymax = asymp.UCL),
+                    linewidth = 0.8) +
+    geom_text(aes(y = max(mod_cld$asymp.UCL)),
+              nudge_y = max(mod_cld$asymp.UCL)/10,
+              color = "black") +
+    theme_bw() +
+    theme(legend.position = "none") +
+    labs(title = "EIR change by region",
+         x = "Region",
+         y = "EIR change/year")
+```
+
+
+```{r}
+# get trends by zone*region
+trendsdf <- emtrends(mod1, ~NERR_Region*zone_coarse, "Year")
+# pairwise contrasts
+contrast(trendsdf, method = "pairwise")
+
+mod_cld <- cld(trendsdf, Letters = letters) %>% 
+    mutate(.group = str_trim(.group))
+
+# plot
+ggplot(mod_cld, aes(x = NERR_Region,
+                    y = Year.trend,
+                    col = NERR_Region,
+                    label = .group,)) +
+    geom_hline(yintercept = 0,
+               col = "gray40") +
+    geom_pointrange(aes(ymin = asymp.LCL,
+                        ymax = asymp.UCL),
+                    linewidth = 0.8) +
+    geom_text(aes(y = max(mod_cld$asymp.UCL)),
+              nudge_y = max(mod_cld$asymp.UCL)/10,
+              color = "black") +
+    facet_wrap(~zone_coarse, ncol = 1) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    labs(title = "EIR change",
+         x = "Region",
+         y = "EIR change/year")
+```
+
