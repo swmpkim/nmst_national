@@ -89,8 +89,8 @@ veg_long_nested <- veg %>%
            date = lubridate::decimal_date(lubridate::ymd(paste(Year, Month, Day)))) %>% 
     select(ResStTrnsPlt,
            date,
-           Total.unvegetated:Unveg_to_veg) %>%
-    pivot_longer(Total.unvegetated:Unveg_to_veg,
+           Total.unvegetated:Salt_to_Total) %>%
+    pivot_longer(Total.unvegetated:Salt_to_Total,
                  names_to = "response",
                  values_to = "cover") %>% 
     group_by(ResStTrnsPlt, response) %>% 
