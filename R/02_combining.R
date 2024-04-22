@@ -44,6 +44,7 @@ groupedSpecies <- groupedSpecies %>%
         # metrics and ratios
         EIR, Richness, SWdiv, 
         Invasive_Cover, Unveg_to_veg,
+        Salt_to_Total,
         # specific species
         any_of(c("Spartina alterniflora", "Spartina patens",
         "Juncus roemerianus", "Salicornia pacifica")),
