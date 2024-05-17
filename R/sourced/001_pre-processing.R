@@ -8,7 +8,7 @@ if(pi_reserve){
     source(here::here("R", "sourced", "001c_pre-processing_PItoOC.R"))
     dat <- dat_out %>% 
         select(-uniqueID)
-    # species_info sheet is read in already from 001b
+    # species_info sheet is read in already from 001c
 } else {
     dat <- get_data(file_dat, cover_only = TRUE) %>%  # gets rid of density and height columns; keeps F_ columns
         select(Reserve, SiteID, TransectID, PlotID, Year, Month, Day,
@@ -19,6 +19,26 @@ if(pi_reserve){
         select(-any_of(otherLayers))
     rm(otherLayers)
     
+    # force to 100
+    dat_toForce <- dat %>% 
+        select(any_of(species_info$Species))
+    dat_toForce$rowTotal <- rowSums(dat_toForce, na.rm = TRUE)
+    to_process <- names(dat_toForce)[-which(names(dat_toForce) == "rowTotal")]
+    dat_forcedTo100 <- dat_toForce %>% 
+        mutate(across(all_of(to_process),
+                      .fns = ~round(./rowTotal * 100, 2))) %>% 
+        select(-rowTotal)
+    dat_forcedTo100$Total <- rowSums(dat_forcedTo100, na.rm = TRUE)
+    
+    # verify
+    hist(dat_forcedTo100$Total, breaks = 20)
+    
+    # replace columns in dat with the normalized ones
+    common_columns <- intersect(names(dat), names(dat_forcedTo100))
+    dat[common_columns] <- dat_forcedTo100[common_columns]
+    
+    # clean up
+    rm(dat_toForce, dat_forcedTo100, to_process, common_columns)
 }
 
 # now do the rest of the pre-processing

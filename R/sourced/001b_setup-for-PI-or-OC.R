@@ -1,10 +1,10 @@
 # PI reserves ----  
 
-expl_sheet <- "https://docs.google.com/spreadsheets/d/12LDWfJvE4Cye56O-Uv_cmGr2a4WLqcKD24OzPVrAEUI/edit?usp=sharing"
+expl_sheet <- here::here("data", "Explanatory Matrix.xlsx")
 
 
 # just one row per reserve/site combination - will be repeated for every plot and date
-expl_dat <- read_sheet(expl_sheet, 
+expl_dat <- read_xlsx(expl_sheet, 
                        sheet = "Time removed",
                        skip = 5) %>% # unless someone adds another row
     filter(`Reserve File` != "EXAMPLE")  %>% 
@@ -54,10 +54,12 @@ names(morph_conv) <- c("Morphology", "Correction_Factor")
 
 # as of 3/4/24 this is now a csv
 # morph_sheet <- "https://docs.google.com/spreadsheets/d/14GS4vqd1B62mgTI8_Yj8qde9RIDUPCG6/edit?usp=sharing&ouid=100678166508144783920&rtpof=true&sd=true"
-morph_sheet <- "https://drive.google.com/file/d/1cb6_G_oFTnIS4fkMtfmv1KDr-zQ9DzFz/view?usp=drive_link"
-drive_download(morph_sheet, path = here::here("data",
-                                              "morph_file.csv"),
-               overwrite = TRUE)
+# morph_sheet <- "https://drive.google.com/file/d/1cb6_G_oFTnIS4fkMtfmv1KDr-zQ9DzFz/view?usp=drive_link"
+# drive_download(morph_sheet, path = here::here("data",
+#                                               "morph_file.csv"),
+#                overwrite = TRUE)
+
+# using previous download as of 5/17/24
 # and read it in
 morph_dat <- readr::read_csv(here::here("data",
                                           "morph_file.csv")) 

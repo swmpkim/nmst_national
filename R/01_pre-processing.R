@@ -4,8 +4,8 @@ library(stringr)
 library(readxl)
 library(tibble)
 library(vegan)
-library(googlesheets4)
-library(googledrive)
+# library(googlesheets4)
+# library(googledrive)
 
 
 path <- here::here("data", "reserve_level")
@@ -29,7 +29,6 @@ for(i in seq_along(reserves)) {
     # path setup
     file_dat <- here::here(path, paste0(res, "_veg.xlsx"))
     file_specs <- here::here(path, paste0(res, "_veg-specs.xlsx"))
-    file_out_fullSpecies <- here::here(outpath, paste0(res, "_veg-fullSpeciesList.RData"))
     file_out_grouped <- here::here(outpath, paste0(res, "_veg-grouped.RData"))
 
     
@@ -38,10 +37,6 @@ for(i in seq_along(reserves)) {
     # process the data
     source(here::here("R", "sourced", "001_pre-processing.R"))
     
-    
-    # write out the data
-    assign(res, dat)
-    save(list = res, file = file_out_fullSpecies)
     
     assign(res, dat_grouped)
     save(list = res, file = file_out_grouped)

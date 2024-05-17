@@ -6,25 +6,38 @@ library(purrr)
 
 path <- here::here("data", "intermediate")
 outpath <- here::here("data", "compiled")
-file_out_fullSpecies <- here::here(outpath, "ALL_veg-fullSpeciesList.csv")
-file_out_grouped <- here::here(outpath, "ALL_veg-grouped.csv")
+file_out_grouped <- here::here(outpath, "national_plot-level.csv")
 
 reserves <- stringr::str_sub(dir(path, pattern = "_veg-grouped.RData"), end = -19)
 
 # read in functions
 source(here::here("R", "sourced", "functions_natl.R"))
 
+# explanatory matrix for screening out sites
+expl_sheet <- here::here("data", "Explanatory Matrix.xlsx")
+
+# just one row per reserve/site combination - will be repeated for every plot and date
+expl_dat <- read_xlsx(expl_sheet, 
+                      sheet = "Time removed",
+                      skip = 5) %>% # unless someone adds another row
+    filter(`Reserve File` != "EXAMPLE")  %>% 
+    janitor::remove_empty("cols") %>% 
+    select(Reserve = `Reserve File`,
+           SiteID = `Site ID (reserve files)`,
+           everything()) %>% 
+    janitor::clean_names()
+sites_to_remove <- expl_dat[which(expl_dat$remove_site_from_national_analysis == "Y"), 1:2]
+
 strt<-Sys.time()
 
 # read all stations in to lists and then bind into data frames with purrr
 
-fullSpecies <- map(reserves, 
-                   ~get(load(here::here(path, paste0(., "_veg-fullSpeciesList.RData"))))) %>% 
-    list_rbind()
-
 groupedSpecies <- map(reserves, 
                       ~get(load(here::here(path, paste0(., "_veg-grouped.RData"))))) %>% 
     list_rbind()
+
+
+# REMOVE PLOTS BASED ON SCREENING CRITERIA (from Explanatory Matrix)
 
 
 
@@ -54,7 +67,6 @@ groupedSpecies <- groupedSpecies %>%
 
 
 # write out the data frames  
-write.csv(fullSpecies, file = file_out_fullSpecies, row.names = FALSE, na = "")
 write.csv(groupedSpecies, file = file_out_grouped, row.names = FALSE, na = "")
 
 Sys.time() - strt

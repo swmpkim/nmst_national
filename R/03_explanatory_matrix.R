@@ -10,6 +10,7 @@
 library(googlesheets4)
 library(tidyverse)
 
+options(gargle_oauth_email = "kim@catbirdstats.com")
 
 expl_sheet <- "https://docs.google.com/spreadsheets/d/12LDWfJvE4Cye56O-Uv_cmGr2a4WLqcKD24OzPVrAEUI/edit?usp=sharing"
 
