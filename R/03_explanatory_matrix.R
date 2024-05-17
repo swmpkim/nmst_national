@@ -7,29 +7,25 @@
 # then connect with the combined veg data file
 # and write out both separate and combined data frames
 
-library(googlesheets4)
 library(tidyverse)
+library(readxl)
 
-options(gargle_oauth_email = "kim@catbirdstats.com")
-
-expl_sheet <- "https://docs.google.com/spreadsheets/d/12LDWfJvE4Cye56O-Uv_cmGr2a4WLqcKD24OzPVrAEUI/edit?usp=sharing"
-
+expl_sheet <- here::here("data", "Explanatory Matrix.xlsx")
 
 # just one row per reserve/site combination - will be repeated for every plot and date
-time_component_no <- read_sheet(expl_sheet, 
-                           sheet = "Time removed",
-                           skip = 5) %>% # unless someone adds another row
+time_component_no <- read_xlsx(expl_sheet, 
+                      sheet = "Time removed",
+                      skip = 5) %>% # unless someone adds another row
     filter(`Reserve File` != "EXAMPLE")  %>% 
     janitor::remove_empty("cols") %>% 
     select(Reserve = `Reserve File`,
            SiteID = `Site ID (reserve files)`,
            everything()) %>% 
-    mutate(`SET change` = unlist(`SET change (mm/yr)`)) %>% 
-    select(-"SET change (mm/yr)")
+    rename(`SET change` = `SET change (mm/yr)`) 
 
 # a row for every year at each reserve - will be repeated for every site/transect/plot within a year
 # but be different in different years
-time_component_yes <- read_sheet(expl_sheet, 
+time_component_yes <- read_xlsx(expl_sheet, 
                              sheet = "Time added",
                              skip = 6,
                              na = c("", "NA"))  %>% 
@@ -59,7 +55,7 @@ time_based_avgs <- time_component_yes %>%
 
 # read in veg file  
 veg <- read.csv(here::here("data", "compiled",
-                           "ALL_veg-grouped.csv"))
+                           "national_plot-level.csv"))
 
 # join into one data frame 
 veg_and_expl <- left_join(veg, time_component_no, by = c("Reserve", "SiteID")) %>% 

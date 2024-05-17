@@ -203,10 +203,6 @@ slopes_by_zone <- slopes_by_plot %>%
 names(time_component_no) <- stringr::str_replace_all(names(time_component_no),
                                                      " ",
                                                      "_")
-fake_SET_data <- rnorm(n = nrow(time_component_no),
-                       mean = 3,
-                       sd = 5)
-
 expl_noTime_toJoin <- time_component_no %>% 
     select(Reserve, SiteID,
            Geomorphology,
@@ -215,9 +211,9 @@ expl_noTime_toJoin <- time_component_no %>%
            SLR_since_1970 = SLR_rate_since_1970,
            SLR_last19yrs = `Local_linear_water_level_change_rate_-_19-yr_rate`,
            Latitude:NERRs_Landscape_Pct_MUC_below_MHHW,
-           Crtieria_for_site_not_met) %>% 
-    mutate(SET_change_FAKE = fake_SET_data,
-           SET_deficit = SLR_since_1970 - SET_change_FAKE)
+           Criteria_for_site_not_met,
+           SET_change) %>% 
+    mutate(SET_deficit = SLR_since_1970 - SET_change)
 
 # put 'slope' in column names ----
 names(slopes_by_plot)[5:ncol(slopes_by_plot)] <- paste0(names(slopes_by_plot)[5:ncol(slopes_by_plot)],

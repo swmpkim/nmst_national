@@ -27,6 +27,10 @@ expl_dat <- read_xlsx(expl_sheet,
            everything()) %>% 
     janitor::clean_names()
 sites_to_remove <- expl_dat[which(expl_dat$remove_site_from_national_analysis == "Y"), 1:2]
+sites_to_remove <- sites_to_remove %>% 
+    mutate(reserve = case_when(str_starts(reserve, "CBM") ~ "CBM",
+                               .default = reserve),
+           ResSt = paste(reserve, site_id))
 
 strt<-Sys.time()
 
@@ -38,7 +42,9 @@ groupedSpecies <- map(reserves,
 
 
 # REMOVE PLOTS BASED ON SCREENING CRITERIA (from Explanatory Matrix)
-
+groupedSpecies <- groupedSpecies %>% 
+    mutate(ResSite = paste(Reserve, SiteID)) %>% 
+    filter(!(ResSite %in% sites_to_remove$ResSt))
 
 
 # put columns in a nicer order?
