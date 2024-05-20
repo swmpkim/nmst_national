@@ -29,6 +29,7 @@ expl_dat <- read_xlsx(expl_sheet,
 sites_to_remove <- expl_dat[which(expl_dat$remove_site_from_national_analysis == "Y"), 1:2]
 sites_to_remove <- sites_to_remove %>% 
     mutate(reserve = case_when(str_starts(reserve, "CBM") ~ "CBM",
+                               str_starts(reserve, "NOC") ~ "NOC",
                                .default = reserve),
            ResSt = paste(reserve, site_id))
 
