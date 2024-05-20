@@ -3,26 +3,28 @@ library(tidyverse)
 load(here::here("data", "compiled", "veg_and_expl_dfs.RData"))
 
 # reserve name matching ----
+# moved this into 03_explanatorY_matrix so shouldn't need here
+# but keeping just in case
 # veg/slopes_by_site don't have the suffixes
 # explanatory variables do have suffixes in reserve name
-resStMatching <- time_component_no %>% 
-    select(File = Reserve, 
-           SiteID) %>% 
-    separate(File, into = c("Res", "St"),
-             remove = FALSE,
-             fill = "right") %>% 
-    select(-St)
-
-veg <- veg %>% 
-    left_join(resStMatching, by = c("Reserve" = "Res",
-                                    "SiteID")) %>% 
-    relocate(File) %>% 
-    mutate(Reserve2 = case_when(is.na(File) ~ Reserve,
-                                File != Reserve ~ File,
-                                .default = Reserve)) %>% 
-    relocate(Reserve2) %>% 
-    select(-File, -Reserve) %>% 
-    rename(Reserve = Reserve2)
+# resStMatching <- time_component_no %>% 
+#     select(File = Reserve, 
+#            SiteID) %>% 
+#     separate(File, into = c("Res", "St"),
+#              remove = FALSE,
+#              fill = "right") %>% 
+#     select(-St)
+# 
+# veg <- veg %>% 
+#     left_join(resStMatching, by = c("Reserve" = "Res",
+#                                     "SiteID")) %>% 
+#     relocate(File) %>% 
+#     mutate(Reserve2 = case_when(is.na(File) ~ Reserve,
+#                                 File != Reserve ~ File,
+#                                 .default = Reserve)) %>% 
+#     relocate(Reserve2) %>% 
+#     select(-File, -Reserve) %>% 
+#     rename(Reserve = Reserve2)
 
 # calculations ----
 # need to calculate slopes by plot
