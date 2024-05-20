@@ -57,6 +57,28 @@ time_based_avgs <- time_component_yes %>%
 veg <- read.csv(here::here("data", "compiled",
                            "national_plot-level.csv"))
 
+# reserve name matching ----
+# veg/slopes_by_site don't have the suffixes
+# explanatory variables do have suffixes in reserve name
+resStMatching <- time_component_no %>% 
+    select(File = Reserve, 
+           SiteID) %>% 
+    separate(File, into = c("Res", "St"),
+             remove = FALSE,
+             fill = "right") %>% 
+    select(-St)
+
+veg <- veg %>% 
+    left_join(resStMatching, by = c("Reserve" = "Res",
+                                    "SiteID")) %>% 
+    relocate(File) %>% 
+    mutate(Reserve2 = case_when(is.na(File) ~ Reserve,
+                                File != Reserve ~ File,
+                                .default = Reserve)) %>% 
+    relocate(Reserve2) %>% 
+    select(-File, -Reserve) %>% 
+    rename(Reserve = Reserve2)
+
 # join into one data frame 
 veg_and_expl <- left_join(veg, time_component_no, by = c("Reserve", "SiteID")) %>% 
     left_join(time_component_yes, by = c("Reserve", "Year"))
