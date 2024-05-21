@@ -74,7 +74,18 @@ veg <- veg %>%
     relocate(File) %>% 
     mutate(Reserve2 = case_when(is.na(File) ~ Reserve,
                                 File != Reserve ~ File,
-                                .default = Reserve)) %>% 
+                                .default = Reserve),
+           Vegetation_Zone = case_match(Vegetation_Zone,
+                                    "M-Mudflat" ~ "Low",
+                                    "S-Seaward Edge" ~ "Low",
+                                    "L-Low Marsh" ~ "Low",
+                                    "P-Pools/Pannes" ~ "Low",
+                                    "T-Transition" ~ "Mid",
+                                    "H-High Marsh" ~ "Mid",
+                                    "UE-Upland Edge" ~ "Up",
+                                    "FT-Freshwater Tidal" ~ "Up",
+                                    "U-Upland" ~ "Up",
+                                    .default = "Other")) %>% 
     relocate(Reserve2) %>% 
     select(-File, -Reserve) %>% 
     rename(Reserve = Reserve2)
@@ -83,9 +94,13 @@ veg <- veg %>%
 veg_and_expl <- left_join(veg, time_component_no, by = c("Reserve", "SiteID")) %>% 
     left_join(time_component_yes, by = c("Reserve", "Year"))
 
+veg_and_expl$...7 <- NULL
+
 # write out RData file with the data frames separate (but joinable)  
 save(veg, time_component_no, time_component_yes, time_based_avgs,
      file = here::here("data", "compiled", "veg_and_expl_dfs.RData"))
+
+
 
 # AFTER THIS POINT, TRANSITION TO NATIONAL SLOPE DF CONSTRUCTION.R
 

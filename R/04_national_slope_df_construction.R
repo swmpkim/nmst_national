@@ -37,21 +37,10 @@ site_metrics <- veg %>%
     select(Reserve, SiteID, Vegetation_Zone, TransectID, PlotID,
            Orthometric_Height, Distance_to_Water) %>% 
     distinct() %>% 
-    mutate(zone_coarse = case_match(Vegetation_Zone,
-                                    "M-Mudflat" ~ "Low",
-                                    "S-Seaward Edge" ~ "Low",
-                                    "L-Low Marsh" ~ "Low",
-                                    "P-Pools/Pannes" ~ "Low",
-                                    "T-Transition" ~ "Mid",
-                                    "H-High Marsh" ~ "Mid",
-                                    "UE-Upland Edge" ~ "Up",
-                                    "FT-Freshwater Tidal" ~ "Up",
-                                    "U-Upland" ~ "Up",
-                                    .default = "Other")) %>% 
     summarize(.by = c(Reserve, SiteID),
-              proportion_low = sum(zone_coarse == "Low")/n(),
-              proportion_midToHigh = sum(zone_coarse == "Mid")/n(),
-              proportion_uplandOrFresh = sum(zone_coarse == "Up")/n(),
+              proportion_low = sum(Vegetation_Zone == "Low")/n(),
+              proportion_midToHigh = sum(Vegetation_Zone == "Mid")/n(),
+              proportion_uplandOrFresh = sum(Vegetation_Zone == "Up")/n(),
               siteAvg_distance_to_water = mean(Distance_to_Water, na.rm = TRUE),
               siteAvg_orthometric_height = mean(Orthometric_Height, na.rm = TRUE))
 
@@ -59,24 +48,13 @@ zone_metrics <- veg %>%
     select(Reserve, SiteID, Vegetation_Zone, TransectID, PlotID,
            Orthometric_Height, Distance_to_Water) %>% 
     distinct() %>% 
-    mutate(zone_coarse = case_match(Vegetation_Zone,
-                                    "M-Mudflat" ~ "Low",
-                                    "S-Seaward Edge" ~ "Low",
-                                    "L-Low Marsh" ~ "Low",
-                                    "P-Pools/Pannes" ~ "Low",
-                                    "T-Transition" ~ "Mid",
-                                    "H-High Marsh" ~ "Mid",
-                                    "UE-Upland Edge" ~ "Up",
-                                    "FT-Freshwater Tidal" ~ "Up",
-                                    "U-Upland" ~ "Up",
-                                    .default = "Other")) %>% 
-    summarize(.by = c(Reserve, SiteID, zone_coarse),
+    summarize(.by = c(Reserve, SiteID, Vegetation_Zone),
               zoneAvg_distance_to_water = mean(Distance_to_Water, na.rm = TRUE),
               zoneAvg_orthometric_height = mean(Orthometric_Height, na.rm = TRUE))
 
 
 plot_metrics <- veg %>% 
-    select(Reserve, SiteID, TransectID, PlotID,
+    select(Reserve, SiteID, TransectID, PlotID, Vegetation_Zone,
            plotOrthometric_height = Orthometric_Height, 
            plotDistance_to_water = Distance_to_Water) %>% 
     distinct()
@@ -172,18 +150,8 @@ slopes_expl_wide <- slopes_expl_long %>%
 # retrieve zone by plot from veg df
 zones_by_plot <- veg %>% 
     select(Reserve, SiteID, TransectID, PlotID, Vegetation_Zone) %>% 
-    distinct() %>% 
-    mutate(zone_coarse = case_match(Vegetation_Zone,
-                                    "M-Mudflat" ~ "Low",
-                                    "S-Seaward Edge" ~ "Low",
-                                    "L-Low Marsh" ~ "Low",
-                                    "P-Pools/Pannes" ~ "Low",
-                                    "T-Transition" ~ "Mid",
-                                    "H-High Marsh" ~ "Mid",
-                                    "UE-Upland Edge" ~ "Up",
-                                    "FT-Freshwater Tidal" ~ "Up",
-                                    "U-Upland" ~ "Up",
-                                    .default = "Other"))
+    distinct() 
+
 # check
 janitor::get_dupes(zones_by_plot, Reserve, SiteID, TransectID, PlotID)
 
@@ -191,9 +159,8 @@ janitor::get_dupes(zones_by_plot, Reserve, SiteID, TransectID, PlotID)
 # have to keep site to join SET rates etc.
 slopes_by_zone <- slopes_by_plot %>% 
     left_join(zones_by_plot) %>% 
-    relocate(c(Vegetation_Zone, zone_coarse)) %>% 
-    select(-TransectID, -PlotID, -Vegetation_Zone) %>% 
-    rename(Vegetation_Zone = zone_coarse) %>% 
+    relocate(Vegetation_Zone) %>% 
+    select(-TransectID, -PlotID) %>% 
     summarize(.by = c(Reserve, SiteID, Vegetation_Zone),
               across(everything(),
                      function(x) mean(x, na.rm = TRUE)))
@@ -250,7 +217,7 @@ slopesAndExpl_byZone <- left_join(slopes_by_zone,
               by = c("Reserve", "SiteID")) %>% 
     left_join(zone_metrics,
               by = c("Reserve", "SiteID", 
-                     "Vegetation_Zone" = "zone_coarse"))
+                     "Vegetation_Zone"))
 
 
 # to slopes by plot ----
@@ -262,7 +229,8 @@ slopesAndExpl_byPlot <- left_join(slopes_by_plot,
     left_join(site_metrics,
               by = c("Reserve", "SiteID")) %>% 
     left_join(plot_metrics,
-              by = c("Reserve", "SiteID", "TransectID", "PlotID"))
+              by = c("Reserve", "SiteID", "TransectID", "PlotID")) %>% 
+    relocate(Vegetation_Zone, .after = PlotID)
 
 # save ----
 save(slopesAndExpl_byPlot,
