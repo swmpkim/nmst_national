@@ -1,0 +1,96 @@
+---
+title: "Untitled"
+format: 
+    html:
+        toc: true
+        toc-location: left
+        code-fold: true
+        embed-resources: true
+warning: false
+message: false
+error: true
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+slopes <- read.csv(here::here("data",
+                              "compiled",
+                              "slopesAndExpl_byPlot.csv"))
+slopes2 <- read.csv(here::here("data",
+                              "compiled",
+                              "slopesAndExpl_bySite.csv"))
+```
+
+Potential responses - change in:  
+
+-  Total unvegetated OR total live vegetated
+-  EIR  
+-  Richness  
+-  Diversity  
+-  Salt-to-Total - not a lot of variation in this though    
+-  Halophyte cover  
+-  Brackish cover  
+
+Potential predictors that we have for all plots:  
+
+-  tide range slope  
+-  temperature slope  
+-  precip slope  
+-  geomorphology (categorical)    
+-  tidal range (categorical)  
+-  salinity category (categorical)  
+-  SLR since 1970  
+-  SLR last 19 years  
+-  Latitude  
+-  Region  
+
+Potential predictors that we don't have for all plots (proportion we have is in parentheses; sorted from highest to lowest):  
+
+-  Landscape resiliency (0.85) .... one or more of the metrics? condition? vulnerability? Pct MUC below MHHW?  
+-  distance to water (0.75 at plot level)  
+-  SET change (0.69)  
+-  SET deficit (0.69; careful of collinearity with SLR metrics)  
+-  orthometric height (0.67 at plot level)  
+-  MARS score (0.58)  
+ 
+
+# Exploring possible responses  
+
+Need a good spread of values in the response.  
+
+```{r}
+responses_long <- slopes %>% 
+    mutate(plot_full = paste(Reserve, SiteID, TransectID, PlotID, sep = "-")) %>% 
+    select(plot_full,
+           Total.unvegetated_slope,
+           Total.live.veg_slope,
+           H.Halophyte_slope,
+           B.Brackish_slope,
+           EIR_slope,
+           Richness_slope,
+           SWdiv_slope,
+           Salt_to_Total_slope) %>% 
+    pivot_longer(-plot_full,
+                 names_to = "response",
+                 values_to = "slope")
+```
+
+```{r}
+ggplot(responses_long,
+       aes(x = slope,
+           fill = response)) +
+    geom_histogram(col = "gray40") + 
+    geom_vline(xintercept = 0,
+               col = "black") +
+    facet_wrap(~response, scales = "free") +
+    khroma::scale_fill_muted() +
+    theme_bw() +
+    theme(legend.position = "none")
+```
+
+Looks like total live/unvegetated are both fine, as is EIR, Halophytes, richness, and diversity. Noting though that increasing richness isn't necessarily always a good thing (the species coming in can be invasive). So we might want to focus on live/unvegetated, EIR, and Halophytes.  
+
+Also, just summarizing these slopes is probably useful - median change around 0 or not? Where are the quantiles? Etc. (after figuring out what the independent units are, so we don't over-represent reserves or regions that have more sampling plots than others)  
