@@ -1,3 +1,7 @@
+# updated 7/11/24 to clarify SET/SLR difference, and add a column
+# so can do that difference for both time frames
+
+
 library(tidyverse)
 
 load(here::here("data", "compiled", "veg_and_expl_dfs.RData"))
@@ -183,7 +187,8 @@ expl_noTime_toJoin <- time_component_no %>%
            Latitude:NERRs_Landscape_Pct_MUC_below_MHHW,
            Criteria_for_site_not_met,
            SET_change) %>% 
-    mutate(SET_deficit = SLR_since_1970 - SET_change)
+    mutate(SET_minus_SLR_1970 = SET_change - SLR_since_1970,
+           SET_minus_SLR_19yrs = SET_change - SLR_last19yrs)
 
 # put 'slope' in column names ----
 names(slopes_by_plot)[5:ncol(slopes_by_plot)] <- paste0(names(slopes_by_plot)[5:ncol(slopes_by_plot)],
@@ -251,40 +256,3 @@ write.csv(slopesAndExpl_byZone,
           na = "",
           row.names = FALSE)
 
-
-
-
-
-
-
-# older - before emails after TWG SEM meeting
-# 4/8/24 Alice asked for summarized data frames:
-# Mean EIR/zone/site; dist. to water mean/zone/site; everything else to site level (this shouldn’t need changing as all other explanatory variable are already at site level as far as I know)
-# Same as above, but at site level (as opposed to zone level).
-
-# veg_and_expl <- read.csv(here::here("data", "compiled", "veg_and_expl.csv"))
-# 
-# df_char <- veg_and_expl %>% 
-#     select_if(is.character) %>% 
-#     select(Reserve, SiteID, Vegetation_Zone)
-# df_num <- veg_and_expl %>% 
-#     select_if(is.numeric) %>% 
-#     select(-Date)
-
-# # To zone/site ----
-# df_byZone <- bind_cols(df_char, df_num) %>% 
-#     summarize(.by = c(Reserve, SiteID, Vegetation_Zone,
-#                       Year, Month, Day),
-#               across(everything(), function(x) mean(x, na.rm = TRUE)))
-# 
-# # To site only ----
-# df_bySite <- bind_cols(df_char, df_num) %>%
-#     select(-Vegetation_Zone) %>% 
-#     summarize(.by = c(Reserve, SiteID, 
-#                       Year, Month, Day),
-#               across(everything(), function(x) mean(x, na.rm = TRUE)))
-# 
-# write.csv(df_byZone, here::here("data", "compiled", "byZone_for_Alice.csv"),
-#           row.names = FALSE)
-# write.csv(df_bySite, here::here("data", "compiled", "bySite_for_Alice.csv"),
-#           row.names = FALSE)
