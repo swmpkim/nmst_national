@@ -13,6 +13,7 @@ error: true
 
 ```{r}
 library(tidyverse)
+library(GGally)
 ```
 
 ```{r}
@@ -23,6 +24,29 @@ slopes2 <- read.csv(here::here("data",
                               "compiled",
                               "slopesAndExpl_bySite.csv"))
 ```
+
+```{r}
+slopes_simplified <- slopes2 %>% 
+    select(Geomorphology,
+           Tidal_Range,
+           Salinity_category,
+           SLR_last19yrs,
+           NERR_Region,
+           Condition = NERRs_Landscape_resiliency_condition_sum_quantile,
+           SET_minus_SLR_19yrs,
+           proportion_low)
+```
+
+
+# Pairs Plots  
+
+```{r}
+ggpairs(slopes_simplified)
+```
+
+
+
+# Other  
 
 Potential responses - change in:  
 
