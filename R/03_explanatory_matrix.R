@@ -109,3 +109,5 @@ write.csv(veg_and_expl,
           file = here::here("data", "compiled", "veg_and_expl.csv"),
           row.names = FALSE,
           na = "")
+
+beepr::beep(8)

@@ -1,0 +1,551 @@
+---
+title: "Namaste National Analysis - Ordinations"
+output-file: "2024-07-30 NMDS Slopes Veg Groups by Site"
+date: today
+format: 
+    pdf:
+        toc: true
+    html:
+        toc: true
+        toc-location: left
+echo: false
+embed-resources: true
+warning: false
+message: false
+error: true
+---
+
+Plot scalings are weird in this file. Living with it for now but can spruce up if we want to include in reports or publications.
+
+```{r}
+library(tidyverse)
+library(vegan)
+library(ggfortify)
+library(fastDummies)
+```
+
+Using the slopes-by-site data frame.  
+
+```{r}
+dat <- read.csv(here::here("data",
+                           "compiled",
+                           "slopesAndExpl_bySite.csv"))
+
+dat_main <- dat %>% 
+    select(Reserve,
+           SiteID,
+           Total.unvegetated_slope,
+           EIR_slope,
+           B.Brackish_slope,
+           F.Freshwater_slope,
+           H.Halophyte_slope,
+           U.Upland_slope,
+           tide_range_slope:Region,
+           condition = NERRs_Landscape_resiliency_condition_sum_quantile,
+           SET_change:last_col()
+           )
+
+responses <- dat_main %>% 
+    select(Total.unvegetated_slope:U.Upland_slope)
+row.names(responses) = paste(dat_main$Reserve, dat_main$SiteID, sep = "-")
+
+responses_scaled <- responses %>% 
+    mutate(across(everything(), function(x) scale(x)[,1]))
+
+explanatory <- dat_main[which(!(names(dat_main) %in% names(responses)))]
+```
+
+is PCA appropriate?  
+
+```{r}
+responses_scaled %>%
+    mutate(site_num = row_number()) %>% 
+    pivot_longer(-site_num,
+                 names_to = "response",
+                 values_to = "normalized_value") %>% 
+    ggplot(aes(x = normalized_value,
+               fill = response)) +
+    geom_histogram(col = "gray20") +
+    facet_wrap(~response) +
+    theme(legend.position = "none")
+```
+
+Ehhhhh, not great. We also don't have perfect completeness in the dataset, so using NMDS here.
+
+
+
+# NMDS  
+
+```{r}
+veg_mds <- metaMDS(responses_scaled,
+                   distance = "euclidean",
+                   autotransform = FALSE,
+                   trace = FALSE,
+                   na.rm = TRUE,
+                   k = 4)
+veg_mds$stress
+```
+
+Takes 4 axes to get stress below 0.1. With 2 axes, stress is 0.15.
+
+```{r}
+data.scores <- as.data.frame(scores(veg_mds)/sqrt(nrow(responses_scaled)))
+loadings <- as.data.frame(scores(envfit(veg_mds, responses_scaled, na.rm = TRUE),
+                                 "vectors"))
+ggplot(data.scores,
+       aes(x = NMDS1,
+           y = NMDS2)) +
+    geom_text(label = rownames(responses_scaled),
+              size = rel(3)) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                  xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+```
+
+
+
+Again, have Gulf outliers - what happens if we take out the Gulf sites?  
+
+# NMDS v2  
+
+
+## Non-Gulf only  
+
+```{r}
+dat_main_non.gulf <- dat_main %>% 
+    filter(!(Reserve %in% c("APA-LSM", "APA-PC", "GND", "MAR")))
+
+responses_non.gulf <- dat_main_non.gulf %>% 
+    select(Total.unvegetated_slope:U.Upland_slope)
+row.names(responses_non.gulf) = paste(dat_main_non.gulf$Reserve, dat_main_non.gulf$SiteID, sep = "-")
+
+responses_scaled_non.gulf <- responses_non.gulf %>% 
+    mutate(across(everything(), function(x) scale(x)[,1]))
+
+explanatory_non.gulf <- dat_main_non.gulf[which(!(names(dat_main_non.gulf) %in% names(responses_non.gulf)))]
+```
+
+```{r}
+veg_mds_non.gulf <-  metaMDS(responses_scaled_non.gulf,
+                   distance = "euclidean",
+                   autotransform = FALSE,
+                   trace = FALSE,
+                   na.rm = TRUE,
+                   k = 4)
+veg_mds_non.gulf$stress
+
+data.scores_non.gulf <- as.data.frame(scores(veg_mds_non.gulf)/sqrt(nrow(responses_scaled_non.gulf)))
+
+loadings_non.gulf <- as.data.frame(scores(envfit(veg_mds_non.gulf, responses_scaled_non.gulf, na.rm = TRUE), "vectors"))
+
+ggplot(data.scores_non.gulf,
+       aes(x = NMDS1,
+           y = NMDS2)) +
+    geom_text(label = rownames(responses_scaled_non.gulf),
+              size = rel(3)) +
+    geom_segment(data = loadings_non.gulf,
+                 aes(x = 0, y = 0,
+                  xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings_non.gulf,
+              label = rownames(loadings_non.gulf),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "Non-Gulf sites only")
+```
+
+
+## with add'l loadings (envfit)  
+
+Using main explanatory variables that are going into LME/SEM portion.  
+
+```{r}
+main_expl <- c("Geomorphology", "Tidal_Range", "Salinity_category",
+               "SLR_last19yrs", "NERR_Region", "condition",
+               "SET_minus_SLR_19yrs", "proportion_low")
+
+
+# select and scale explanatory vars
+explanatory_sub <- explanatory %>% 
+    select(all_of(main_expl)) %>% 
+    mutate(across(c(SLR_last19yrs, condition, SET_minus_SLR_19yrs, proportion_low), scale))
+
+# turn categorical ones into dummy columns
+explanatory_sub <- dummy_cols(explanatory_sub, remove_first_dummy = FALSE,
+                               remove_selected_columns = TRUE)
+
+# split into numeric and categorical data frames
+# for different colored plotting
+expl_sub_numeric <- explanatory_sub %>% 
+    select(SLR_last19yrs:proportion_low)
+expl_sub_cat <- explanatory_sub[ , which(!(names(explanatory_sub) %in% names(expl_sub_numeric)))]
+# put it on a similar sd scale as categorical vars by multiplying by 2
+expl_sub_cat <- expl_sub_cat*2
+
+
+# adapt those for non-gulf sites
+# select and scale explanatory vars
+explanatory_sub <- explanatory_non.gulf %>% 
+    select(all_of(main_expl)) %>% 
+    mutate(across(c(SLR_last19yrs, condition, SET_minus_SLR_19yrs, proportion_low), scale))
+
+# turn categorical ones into dummy columns
+explanatory_sub <- dummy_cols(explanatory_sub, remove_first_dummy = FALSE,
+                               remove_selected_columns = TRUE)
+
+# split into numeric and categorical data frames
+# for different colored plotting
+expl_sub_numeric_non.gulf <- explanatory_sub %>% 
+    select(SLR_last19yrs:proportion_low)
+expl_sub_cat_non.gulf <- explanatory_sub[ , which(!(names(explanatory_sub) %in% names(expl_sub_numeric_non.gulf)))]
+expl_sub_cat_non.gulf <- expl_sub_cat_non.gulf*2
+
+
+# create separate envfits and data frames of coords for each type
+# all sites
+# numeric
+addl_num <- envfit(veg_mds, expl_sub_numeric, na.rm = TRUE)
+vector_num <- as.data.frame(scores(addl_num, "vectors"))
+mult_num <- ordiArrowMul(addl_num)  # multiplier for scaling plots
+# categorical
+addl_cat <- envfit(veg_mds, expl_sub_cat, na.rm = TRUE)
+vector_cat <- as.data.frame(scores(addl_cat, "vectors"))
+
+# non-gulf
+# numeric
+addl_num_non.gulf <- envfit(veg_mds_non.gulf, expl_sub_numeric_non.gulf, na.rm = TRUE)
+vector_num_non.gulf <- as.data.frame(scores(addl_num_non.gulf, "vectors"))
+mult_num_non.gulf <- ordiArrowMul(addl_num_non.gulf)  # multiplier for scaling plots
+# categorical
+addl_cat_non.gulf <- envfit(veg_mds_non.gulf, expl_sub_cat_non.gulf, na.rm = TRUE)
+vector_cat_non.gulf <- as.data.frame(scores(addl_cat_non.gulf, "vectors"))
+```
+
+
+# Plots - All Sites  
+
+## Only Responses overlaid  
+
+```{r}
+# plot all sites
+p <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_text(label = rownames(responses_scaled),
+              size = rel(3)) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+p
+
+# points only
+ppts <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_point() +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+```
+
+
+## Numeric Loadings overlaid  
+
+```{r}
+p2 <- ppts +
+    geom_segment(data = vector_num,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "blue") +
+    geom_text(data = vector_num,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(vector_num),
+              col = "blue")
+
+p2
+```
+
+
+
+## Categorical Loadings overlaid  
+
+```{r}
+p3 <- ppts +
+    geom_segment(data = vector_cat,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "purple") +
+    geom_text(data = vector_cat,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(vector_cat),
+              col = "purple",
+              size = rel(3))
+p3
+```
+
+
+
+
+## Color by categories instead  
+
+```{r}
+# divide by the square root of number of rows
+# to get graph scaling factor
+nmds_and_expl <- cbind(scores(veg_mds)/sqrt(nrow(explanatory)), explanatory)
+nmds_and_expl_non.gulf <- cbind(scores(veg_mds_non.gulf)/sqrt(nrow(explanatory_non.gulf)), explanatory_non.gulf)
+```
+
+
+```{r}
+p <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites") 
+
+num_loadings <- geom_segment(data = vector_num,
+                             aes(x = 0, y = 0,
+                                 xend = NMDS1, yend = NMDS2),
+                             col = "blue") 
+num_labels <- geom_text(data = vector_num,
+                        aes(x = NMDS1, y = NMDS2),
+                        label = rownames(vector_num),
+                        col = "blue")
+
+p +
+    geom_point(data = nmds_and_expl,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = NERR_Region),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Region") +
+    num_loadings +
+    num_labels
+    
+
+
+p +
+    geom_point(data = nmds_and_expl,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = Geomorphology),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Geomorphology") +
+    num_loadings +
+    num_labels
+
+p +
+    geom_point(data = nmds_and_expl,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = Salinity_category),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Salinity Category") +
+    num_loadings +
+    num_labels
+
+
+p +
+    geom_point(data = nmds_and_expl,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = Tidal_Range),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Tidal range") +
+    num_loadings +
+    num_labels
+```
+
+
+
+
+# Plots - Non-Gulf Sites  
+
+## Only Responses overlaid  
+
+```{r}
+# plot all sites
+p <- ggplot(data.scores_non.gulf,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_text(label = rownames(responses_scaled_non.gulf),
+              size = rel(3)) +
+    geom_segment(data = loadings_non.gulf,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings_non.gulf,
+              label = rownames(loadings_non.gulf),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+p
+
+# points only
+ppts <- ggplot(data.scores_non.gulf,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_point() +
+    geom_segment(data = loadings_non.gulf,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings_non.gulf,
+              label = rownames(loadings_non.gulf),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+```
+
+
+## Numeric Loadings overlaid  
+
+```{r}
+p2 <- ppts +
+    geom_segment(data = vector_num_non.gulf,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "blue") +
+    geom_text(data = vector_num_non.gulf,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(vector_num_non.gulf),
+              col = "blue")
+
+p2
+```
+
+
+
+## Categorical Loadings overlaid  
+
+```{r}
+p3 <- ppts +
+    geom_segment(data = vector_cat_non.gulf,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "purple") +
+    geom_text(data = vector_cat_non.gulf,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(vector_cat_non.gulf),
+              col = "purple",
+              size = rel(3))
+p3
+```
+
+
+
+
+## Color by categories instead  
+
+
+```{r}
+p <- ggplot(data.scores_non.gulf,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_segment(data = loadings_non.gulf,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text(data = loadings_non.gulf,
+              label = rownames(loadings_non.gulf),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "Non-Gulf only sites") 
+
+num_loadings <- geom_segment(data = vector_num_non.gulf,
+                             aes(x = 0, y = 0,
+                                 xend = NMDS1, yend = NMDS2),
+                             col = "blue") 
+num_labels <- geom_text(data = vector_num_non.gulf,
+                        aes(x = NMDS1, y = NMDS2),
+                        label = rownames(vector_num_non.gulf),
+                        col = "blue")
+
+p +
+    geom_point(data = nmds_and_expl_non.gulf,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = NERR_Region),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Region") +
+    num_loadings +
+    num_labels
+    
+
+
+p +
+    geom_point(data = nmds_and_expl_non.gulf,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = Geomorphology),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Geomorphology") +
+    num_loadings +
+    num_labels
+
+p +
+    geom_point(data = nmds_and_expl_non.gulf,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = Salinity_category),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Salinity Category") +
+    num_loadings +
+    num_labels
+
+
+p +
+    geom_point(data = nmds_and_expl_non.gulf,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   col = Tidal_Range),
+               size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    labs(subtitle = "Colored by Tidal range") +
+    num_loadings +
+    num_labels
+```
+
+
+
+
+# Other  
+
+## Condition?  
+
+```{r}
+ggplot(dat_main, aes(x = Reserve, y = condition)) + geom_jitter() + theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+```
+

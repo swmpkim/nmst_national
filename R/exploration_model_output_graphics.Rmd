@@ -1,0 +1,277 @@
+---
+title: '""'
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+load(here::here("data", "compiled", "veg_and_expl_dfs.RData"))
+```
+
+```{r}
+dat_eir <- veg %>% 
+    select(Reserve:Day,
+           EIR,
+           -Vegetation_Zone) %>% 
+    nest(data = Year:EIR)
+```
+
+```{r}
+dat <- veg %>% 
+    mutate(plot_full = paste(Reserve, SiteID, TransectID, PlotID,
+                             sep = ";"),
+           dec_date = lubridate::decimal_date(lubridate::ymd(paste(Year, Month, Day))))
+
+all_plots <- unique(dat$plot_full)
+slopes <- numeric()
+pvals <- numeric()
+r2s <- numeric()
+
+for(i in seq_along(all_plots)){
+    tmp <- dat %>% 
+        filter(plot_full == all_plots[i])
+    
+    
+    # if the model doesn't run, insert NAs
+    if(inherits(
+        try(lm(EIR ~ dec_date, data = tmp), silent = TRUE), 
+        "try-error")){
+        slopes[i] <- NA
+        pvals[i] <- NA
+        r2s[i] <- NA
+    } else {
+        # otherwise, run it and pull out coefficients
+        mod <- lm(EIR ~ dec_date, data = tmp)
+        tidied <- broom::tidy(mod)
+        slopes[i] <- tidied$estimate[2]
+        pvals[i] <- tidied$p.value[2]
+        r2s[i] <- broom::glance(mod)$r.squared
+    }
+    
+
+}
+
+
+mods_all <- as.data.frame(cbind(all_plots, slopes, pvals, r2s)) %>% 
+    set_names(c("Plot", "Slope", "pval", "R2")) %>% 
+    filter(pval != "NaN") %>% 
+    mutate(across(Slope:R2, function(x) round(as.numeric(x), 5)))
+
+```
+
+
+```{r}
+expl <- time_component_no %>% 
+    janitor::clean_names() %>% 
+    select(reserve, site_id, geomorphology,
+           tidal_range, salinity_category,
+           slr_rate_since_1970,
+           latitude,
+           region,
+           nerrs_mars)
+
+veg_zones <- veg %>% 
+    select(Reserve, SiteID, TransectID, PlotID,
+           Vegetation_Zone,
+           Distance_to_Water) %>% 
+    janitor::clean_names()
+
+mods_and_expl <- mods_all %>% 
+    tidyr::separate(Plot, into = c("reserve", "site_id", "transect_id", "plot_id"), sep = ";") %>% 
+    left_join(expl, by = c("reserve", "site_id")) %>% 
+    left_join(veg_zones, by = c("reserve", "site_id", "transect_id", "plot_id")) %>% 
+    mutate(pval_cat = case_when(pval <= 0.05 ~ "<0.05",
+                                pval <= 0.2 ~ "0.05-0.20",
+                                .default = ">0.20"))
+```
+
+Fix up regions and assign names to the codes  
+
+
+```{r}
+# looked up bioregions on https://www.oneearth.org/navigator/
+bioregion_dictionary <- tribble(
+    ~"region", ~"region_description",
+    "NA10", "Northeast",
+    "NA11", "Great Lakes",
+    "NA12", "Northern Prairie and Aspen Forests (???)",
+    "NA13", "Greater Rockies and Mountain Forests (???)",
+    "NA15", "Pacific Northwest",
+    "NA25", "Southeast + N. Gulf",
+    "NA27", "Western Gulf",
+    "NA31", "California",
+    "NA4", "Alaska"
+)
+
+
+mods_and_expl <- mods_and_expl %>% 
+    mutate(region = case_when(reserve %in% c("CBM", "APA", "NOC") ~ "NA25",
+                              reserve == "HUD-TIV" ~ "NA10",
+                              .default = region)) %>% 
+    left_join(bioregion_dictionary)
+
+
+
+```
+
+```{r}
+# library(ggExtra)
+# p <- ggplot(mods_all) +
+#     geom_point(aes(x = pval, y = Slope, col = R2)) +
+#     #scale_y_log10() +
+#     theme(legend.position = "bottom") +
+#     geom_hline(yintercept = 0) +
+#     geom_vline(xintercept = c(0.05, 0.2))
+# 
+# ggMarginal(p, type = "histogram")
+```
+
+```{r}
+ggplot(mods_all, aes(x = pval, y = Slope)) +
+    geom_point(aes(col = R2), alpha = 0.5) +
+    # scale_y_log10() +
+    # theme(legend.position = "bottom") +
+    geom_hline(yintercept = 0) +
+    geom_vline(xintercept = c(0.05, 0.2)) +
+    geom_rug(col = "gray40", alpha = 0.15) +
+    theme_bw() +
+    labs(title = "Plot-wise EIR slopes and significance")
+
+# or with slope as the x-axis?
+ggplot(mods_all, aes(x = pval, y = Slope)) +
+    geom_point(aes(col = R2), alpha = 0.5) +
+    # scale_y_log10() +
+    # theme(legend.position = "bottom") +
+    geom_hline(yintercept = 0) +
+    geom_vline(xintercept = c(0.05, 0.2)) +
+    geom_rug(col = "gray40", alpha = 0.15) +
+    theme_bw() +
+    labs(title = "Plot-wise EIR slopes and significance") +
+    scale_x_continuous(breaks = c(0.05, 0.2, 1)) +
+    scale_y_continuous(breaks = c(-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3)) +
+    coord_flip()
+
+ggplot(mods_all, aes(x = pval, y = Slope)) +
+    geom_point(aes(col = R2), alpha = 0.5) +
+    # scale_y_log10() +
+    # theme(legend.position = "bottom") +
+    geom_hline(yintercept = 0) +
+    geom_vline(xintercept = c(0.05, 0.2)) +
+    geom_rug(col = "gray40", alpha = 0.15) +
+    theme_bw() +
+    labs(title = "Plot-wise EIR slopes and significance") +
+    scale_x_log10(breaks = c(0.05, 0.2, 1)) +
+    scale_y_continuous(breaks = c(-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3)) +
+    coord_flip()
+```
+
+
+```{r}
+ggplot(mods_and_expl) +
+    geom_jitter(aes(x = region_description, y = Slope, col = pval_cat),
+               alpha = 0.4,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    labs(title = "EIR Slopes by Region",
+         subtitle = "one slope per veg plot",
+         y = "Change in EIR per year",
+         x = "Region",
+         color = "p-value") +
+    theme(axis.text.x = element_text(angle = 30,
+                                     hjust = 1))
+
+ggplot(mods_and_expl) +
+    geom_jitter(aes(x = latitude, y = Slope, col = pval_cat),
+               alpha = 0.4,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    labs(title = "EIR Slopes by Latitude",
+         subtitle = "one slope per veg plot",
+         color = "p-value")
+
+ggplot(mods_and_expl) +
+    geom_jitter(aes(x = geomorphology, y = Slope, col = pval_cat),
+               alpha = 0.4,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    labs(title = "EIR Slopes by Geomorphology",
+         subtitle = "one slope per veg plot",
+         color = "p-value")
+
+
+ggplot(mods_and_expl) +
+    geom_jitter(aes(x = salinity_category, y = Slope, col = pval_cat),
+               alpha = 0.4,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    labs(title = "EIR Slopes by Salinity Category",
+         subtitle = "one slope per veg plot",
+         color = "p-value")
+
+ggplot(mods_and_expl) +
+    geom_jitter(aes(x = nerrs_mars, y = Slope, col = pval_cat),
+               alpha = 0.4,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    labs(title = "EIR Slopes by MARS designation",
+         subtitle = "one slope per veg plot",
+         color = "p-value")
+
+ggplot(mods_and_expl) +
+    geom_jitter(aes(x = slr_rate_since_1970, y = Slope, col = pval_cat),
+               alpha = 0.6,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    labs(title = "EIR Slopes by SLR rate",
+         subtitle = "one slope per veg plot",
+         color = "p-value")
+
+ggplot(mods_and_expl) +
+    geom_jitter(aes(x = vegetation_zone, y = Slope, col = pval_cat),
+               alpha = 0.6,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    theme(axis.text.x = element_text(angle = 40,
+                                     hjust = 1)) +
+    labs(title = "EIR Slopes by Vegetation Zone",
+         subtitle = "one slope per veg plot",
+         color = "p-value")
+
+ggplot(mods_and_expl) +
+    geom_point(aes(x = distance_to_water, y = Slope, col = pval_cat),
+               alpha = 0.6,
+               size = 3) +
+    geom_hline(yintercept = 0, col = "black", linewidth = 1) +
+    theme_bw() +
+    scale_color_highcontrast() +
+    labs(title = "EIR Slopes by Distance to Water",
+         subtitle = "one slope per veg plot",
+         color = "p-value")
+
+```
+
+
+
+I think these NA11, 12, and 13s were dragging/copy errors - all are HUD-TIV, which starts with NA10 (Northeast).  Also, I don't think APA should be NT26 - they should be NA25 like the rest of us....

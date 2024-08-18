@@ -1,0 +1,161 @@
+---
+title: "Namaste National Multivariate Analyses"
+date: today
+format: 
+    html:
+        toc: true
+        toc-location: left
+        code-fold: true
+        embed-resources: true
+warning: false
+message: false
+error: true
+---
+
+```{r}
+library(tidyverse)
+library(vegan)
+library(ggfortify)
+library(fastDummies)
+library(ecole)
+```
+
+
+## read and prepare data  
+
+Using the "slopes" by site data frame - changes at the site level.  
+
+```{r}
+dat <- read.csv(here::here("data",
+                           "compiled",
+                           "slopesAndExpl_bySite.csv"))
+
+dat_main <- dat %>% 
+    select(Reserve,
+           SiteID,
+           Total.live.veg_slope,
+           EIR_slope,
+           Richness_slope,
+           SWdiv_slope,
+           tide_range_slope:Region,
+           condition = NERRs_Landscape_resiliency_condition_sum_quantile,
+           SET_change:last_col()
+    ) %>% 
+    mutate(# fix Geomorphyology
+        Geomorphology = case_when(Geomorphology == "Back Barrier" ~ "Back barrier",
+                                  .default = Geomorphology),
+        # turn character cols into factors
+        across(where(is.character), as.factor),
+        # turn appropriate columns into ordered factors
+        Tidal_Range = factor(Tidal_Range, levels = c("Microtidal", "Mesotidal", "Macrotidal"), ordered = TRUE),
+        Salinity_category = factor(Salinity_category,
+                                   levels = c("Fresh", "Oligohaline",
+                                              "Mesohaline", "Polyhaline"), ordered = TRUE)
+    )
+
+responses <- dat_main %>% 
+    select(Total.live.veg_slope:SWdiv_slope)
+row.names(responses) = paste(dat_main$Reserve, dat_main$SiteID, sep = "-")
+
+responses_scaled <- responses %>% 
+    mutate(across(everything(), function(x) scale(x)[,1]))
+
+explanatory <- dat_main[which(!(names(dat_main) %in% names(responses)))]
+
+explanatory_scaled <- explanatory %>% 
+    mutate(across(where(is.numeric), 
+                  function(x) scale(x)[,1]))
+
+explanatory_scaled_main <- explanatory_scaled %>% 
+    select(Geomorphology, Tidal_Range, Salinity_category,
+           SLR_last19yrs, NERR_Region, condition,
+           SET_minus_SLR_19yrs, proportion_low)
+```
+
+
+
+# Ordinations  
+
+```{r}
+test_gower <- cluster::daisy(explanatory_scaled_main, metric = "gower")
+test_gower_nmds <- metaMDS(test_gower, trace = 0)
+plot(test_gower_nmds)
+
+
+test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main, 
+                      method = "spearman",
+                      index = "euclidean",
+                      metric = "gower")
+
+
+cat("Explanatory variables used in bioenv: \n")
+cat(paste("*", names(explanatory_scaled_main)), sep = "\n")
+
+test_bioenv
+
+summary(test_bioenv)
+```
+
+
+# PERMANOVA  
+
+One PERMANOVA for each key factor we care about. Setting this up like a multiple regression means each predictor's effect (and p-value) is influenced by what other predictors are present in the model. We just want to know if, overall, aside from anything else, each of these are different.  
+
+If a PERMANOVA is significant for a factor, then pairwise comparisons will be run: pairwise PERMANOVAs to see which groups are different from which other groups, and SIMPER, which is pairwise between groups to show which pieces of the response matrix are most influencing differences between groups.  
+
+NOTE that SIMPER will run all pairs whether the PERMANOVA showed significance or not, so be sure to check the pairwise PERMANOVA before getting too excited about SIMPER output!  
+
+```{r}
+# set up a loop to make a 2nd level header - ## - for each
+# key predictor  
+
+# below that, ### overall permanova, then if that's significant,
+# ### pairwise permanovas, ### SIMPER  
+
+# might have to write my own function for numeric predictors
+# simper definitely won't work on numeric predictors
+# permanova_pairwise turns them into factors
+
+key_preds_cat <- c("NERR_Region", "Salinity_category",
+                    "Geomorphology", "Tidal_Range")
+key_preds_num <- c("condition", "SLR_last19yrs",
+                    "SET_minus_SLR_19yrs", "proportion_low")
+
+for(i in seq_along(key_preds_cat)){
+    cat("\n\n---------------------------------------------------------- \n")
+    cat("---------------------------------------------------------- \n\n")
+    cat(paste0("~~~", key_preds_cat[i], "~~~\n\n"))
+
+    explanatory_tmp <- explanatory
+    names(explanatory_tmp)[which(names(explanatory_tmp) == key_preds_cat[i])] <- "predictor"
+    
+    perm <- adonis2(responses_scaled ~ predictor,
+                    data = explanatory_tmp,
+                    method = "euclidean",
+                    na.action = "na.omit"
+    )
+    
+    cat(paste0("PERMANOVA overall for ", key_preds_cat[i], "\n\n"))
+    print(perm)
+    
+    
+    if(perm$`Pr(>F)`[1] < 0.05){
+        cat(paste0("PERMANOVA for ", key_preds_cat[i], " was significant at the level alpha = 0.05. Pairwise tests follow. \n\n"))
+        cat(paste0("~~Pairwise PERMANOVA, ", key_preds_cat[i], "~~ \n\n"))
+        perm_pair <- permanova_pairwise(responses_scaled,
+                                        grp = explanatory_tmp$predictor,
+                                        method = "euclidean")
+        
+        print(perm_pair)
+        
+        cat(paste0("\n\n ~~SIMPER, ", key_preds_cat[i], "~~ \n\n"))
+        simp <- simper(responses_scaled, group = explanatory_tmp$predictor)
+        
+        print(summary(simp))
+            
+            
+    }
+
+}
+```
+
