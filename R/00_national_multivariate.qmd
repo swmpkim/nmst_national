@@ -15,8 +15,7 @@ error: true
 ```{r}
 library(tidyverse)
 library(vegan)
-library(ggfortify)
-library(fastDummies)
+library(ggrepel)
 library(ecole)
 ```
 
@@ -33,8 +32,10 @@ dat <- read.csv(here::here("data",
 dat_main <- dat %>% 
     select(Reserve,
            SiteID,
+           Total.unvegetated_slope,
            Total.live.veg_slope,
            EIR_slope,
+           H.Halophyte_slope,
            Richness_slope,
            SWdiv_slope,
            tide_range_slope:Region,
@@ -51,10 +52,11 @@ dat_main <- dat %>%
         Salinity_category = factor(Salinity_category,
                                    levels = c("Fresh", "Oligohaline",
                                               "Mesohaline", "Polyhaline"), ordered = TRUE)
-    )
+    ) %>% 
+    filter(!is.na(H.Halophyte_slope))
 
 responses <- dat_main %>% 
-    select(Total.live.veg_slope:SWdiv_slope)
+    select(Total.unvegetated_slope:SWdiv_slope)
 row.names(responses) = paste(dat_main$Reserve, dat_main$SiteID, sep = "-")
 
 responses_scaled <- responses %>% 
@@ -73,28 +75,6 @@ explanatory_scaled_main <- explanatory_scaled %>%
 ```
 
 
-
-# Ordinations  
-
-```{r}
-test_gower <- cluster::daisy(explanatory_scaled_main, metric = "gower")
-test_gower_nmds <- metaMDS(test_gower, trace = 0)
-plot(test_gower_nmds)
-
-
-test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main, 
-                      method = "spearman",
-                      index = "euclidean",
-                      metric = "gower")
-
-
-cat("Explanatory variables used in bioenv: \n")
-cat(paste("*", names(explanatory_scaled_main)), sep = "\n")
-
-test_bioenv
-
-summary(test_bioenv)
-```
 
 
 # PERMANOVA  
@@ -158,4 +138,281 @@ for(i in seq_along(key_preds_cat)){
 
 }
 ```
+
+
+# Ordinations  
+
+```{r}
+test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main, 
+                      method = "spearman",
+                      index = "euclidean",
+                      metric = "gower")
+
+
+cat("Explanatory variables used in bioenv: \n")
+cat(paste("*", names(explanatory_scaled_main)), sep = "\n")
+
+test_bioenv
+
+summary(test_bioenv)
+```
+
+# NMDS  
+
+```{r}
+veg_mds <- metaMDS(responses_scaled,
+                   distance = "euclidean",
+                   autotransform = FALSE,
+                   trace = FALSE)
+veg_mds$stress
+```
+
+```{r}
+data.scores <- as.data.frame(scores(veg_mds))
+loadings <- as.data.frame(scores(envfit(veg_mds, responses_scaled), display = "vectors")) *3
+
+# numeric explanatory loadings
+expl_numeric <- explanatory_scaled %>% 
+    select(SLR_last19yrs,
+           condition,
+           SET_minus_SLR_19yrs,
+           proportion_low)
+
+env_expl <- as.data.frame(scores(envfit(veg_mds, expl_numeric, na.rm = TRUE), display = "vectors")) *5
+
+```
+
+
+
+```{r}
+# plot all sites
+p <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_text(label = rownames(responses_scaled),
+              size = rel(3)) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+p
+
+# points only
+ppts <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_point() +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+```
+
+## Numeric Loadings overlaid - all  
+
+```{r}
+p2 <- ppts +
+    geom_segment(data = env_expl,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "blue") +
+    geom_text_repel(data = env_expl,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(env_expl),
+              col = "blue")
+
+p2
+```
+
+
+## Color by categorical predictors that were important in bioenv  
+
+```{r}
+nmds_and_expl <- cbind(data.scores, explanatory_scaled_main)
+```
+
+```{r}
+plot_nmds2 <- function(expl_color){
+    
+p <- ggplot(nmds_and_expl,
+            aes(x = NMDS1,
+                y = NMDS2,
+                col = {{expl_color}})) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    geom_segment(data = env_expl,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "blue") +
+    geom_text_repel(data = env_expl,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(env_expl),
+              col = "blue") +
+    geom_point(size = 3, alpha = 0.6) +
+    labs(title = "NMDS")
+
+p
+}
+```
+
+```{r}
+plot_nmds2(NERR_Region)
+```
+
+## Bio-env best model graph  
+
+
+```{r}
+env_expl <- env_expl[1:2, ]
+```
+
+```{r}
+plot_nmds2(NERR_Region)
+```
+
+
+# How do ordinations change when we remove the Gulf sites?  
+
+```{r}
+gulfsites <- which(dat_main$NERR_Region == "Gulf Coast")
+responses_scaled <- responses_scaled[-gulfsites, ]
+explanatory_scaled <- explanatory_scaled[-gulfsites, ]
+explanatory_scaled_main <- explanatory_scaled_main[-gulfsites, ]
+```
+
+
+
+```{r}
+test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main, 
+                      method = "spearman",
+                      index = "euclidean",
+                      metric = "gower")
+
+
+cat("Explanatory variables used in bioenv: \n")
+cat(paste("*", names(explanatory_scaled_main)), sep = "\n")
+
+test_bioenv
+
+summary(test_bioenv)
+```
+
+# NMDS  
+
+```{r}
+veg_mds <- metaMDS(responses_scaled,
+                   distance = "euclidean",
+                   autotransform = FALSE,
+                   trace = FALSE)
+veg_mds$stress
+```
+
+```{r}
+data.scores <- as.data.frame(scores(veg_mds))
+loadings <- as.data.frame(scores(envfit(veg_mds, responses_scaled), display = "vectors")) *3
+
+# numeric explanatory loadings
+expl_numeric <- explanatory_scaled %>% 
+    select(SLR_last19yrs,
+           condition,
+           SET_minus_SLR_19yrs,
+           proportion_low)
+
+env_expl <- as.data.frame(scores(envfit(veg_mds, expl_numeric, na.rm = TRUE), display = "vectors")) *5
+
+```
+
+
+
+```{r}
+# plot all sites
+p <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_text(label = rownames(responses_scaled),
+              size = rel(3)) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+p
+
+# points only
+ppts <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_point() +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+```
+
+## Numeric Loadings overlaid - all  
+
+```{r}
+p2 <- ppts +
+    geom_segment(data = env_expl,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "blue") +
+    geom_text_repel(data = env_expl,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(env_expl),
+              col = "blue")
+
+p2
+```
+
+
+## Color by categorical predictors that were important in bioenv  
+
+```{r}
+nmds_and_expl <- cbind(data.scores, explanatory_scaled_main)
+```
+
+```{r}
+plot_nmds2(Salinity_category)
+
+plot_nmds2(NERR_Region)
+```
+
+## Bio-env best model graph  
+
+
+```{r}
+env_expl <- env_expl[4, ]
+```
+
+```{r}
+plot_nmds2(Salinity_category)
+
+plot_nmds2(NERR_Region)
+```
+
 
