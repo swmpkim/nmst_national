@@ -1,0 +1,386 @@
+---
+title: "Namaste National Analyses"
+subtitle: "Multivariate changes, at zone-within-site level"
+output-file: "2024-08-19 Nat'l Multivar by Zone"
+date: today
+format: 
+    html:
+        toc: true
+        toc-location: left
+        code-fold: true
+        embed-resources: true
+    pdf:
+        toc: true
+        echo: false
+warning: false
+message: false
+error: true
+fig-width: 7
+fig-height: 5
+---
+
+```{r}
+library(tidyverse)
+library(vegan)
+library(ggrepel)
+library(ecole)
+```
+
+
+## read and prepare data  
+
+Using the "slopes" by zone data frame - changes at the zone-within-site level.  
+
+```{r}
+dat <- read.csv(here::here("data",
+                           "compiled",
+                           "slopesAndExpl_byZone.csv"))
+
+H.slopes <- dat %>% 
+    summarize(.by = Vegetation_Zone,
+              H.Halophyte_slope = mean(H.Halophyte_slope, na.rm = TRUE))
+
+dat_main <- dat %>% 
+    select(Reserve,
+           SiteID,
+           Vegetation_Zone,
+           Total.unvegetated_slope,
+           Total.live.veg_slope,
+           EIR_slope,
+           H.Halophyte_slope,
+           Richness_slope,
+           SWdiv_slope,
+           tide_range_slope:Region,
+           condition = NERRs_Landscape_resiliency_condition_sum_quantile,
+           SET_change:last_col()
+    ) %>% 
+    mutate(
+        # replace the H.Halophyte NAs with the zone averages of the others
+        H.Halophyte_slope = case_when(is.na(H.Halophyte_slope) ~ 0, 
+                                      .default = H.Halophyte_slope),
+        # fix Geomorphyology
+        Geomorphology = case_when(Geomorphology == "Back Barrier" ~ "Back barrier",
+                                  .default = Geomorphology),
+        # turn character cols into factors
+        across(where(is.character), as.factor),
+        # turn appropriate columns into ordered factors
+        Vegetation_Zone = factor(Vegetation_Zone, levels = c("Low", "Mid", "Up"), ordered = TRUE),
+        Tidal_Range = factor(Tidal_Range, levels = c("Microtidal", "Mesotidal", "Macrotidal"), ordered = TRUE),
+        Salinity_category = factor(Salinity_category,
+                                   levels = c("Fresh", "Oligohaline",
+                                              "Mesohaline", "Polyhaline"), ordered = TRUE)
+    ) 
+
+responses <- dat_main %>% 
+    select(Total.unvegetated_slope:SWdiv_slope)
+row.names(responses) = paste(dat_main$Reserve, dat_main$SiteID, dat_main$Vegetation_Zone, sep = "-")
+
+responses_scaled <- responses %>% 
+    mutate(across(everything(), function(x) scale(x)[,1]))
+
+explanatory <- dat_main[which(!(names(dat_main) %in% names(responses)))]
+
+explanatory_scaled <- explanatory %>% 
+    mutate(across(where(is.numeric), 
+                  function(x) scale(x)[,1]))
+
+explanatory_scaled_main <- explanatory_scaled %>% 
+    select(Geomorphology, Tidal_Range, Salinity_category,
+           SLR_last19yrs, NERR_Region, condition,
+           SET_minus_SLR_19yrs, Vegetation_Zone)
+```
+
+
+
+
+# PERMANOVA  
+
+One PERMANOVA for each key factor we care about. Setting this up like a multiple regression means each predictor's effect (and p-value) is influenced by what other predictors are present in the model. We just want to know if, overall, aside from anything else, each of these are different, so I'm doing these one-at-a-time.  
+
+If a PERMANOVA is significant for a factor, then pairwise comparisons will be run: pairwise PERMANOVAs to see which groups are different from which other groups, and SIMPER, which is pairwise between groups to show which pieces of the response matrix are most influencing differences between groups.  
+
+NOTE that SIMPER will run all pairs whether the PERMANOVA showed significance or not, so be sure to check the pairwise PERMANOVA before getting too excited about SIMPER output!  
+
+
+
+```{r}
+# set up a loop to make a 2nd level header - ## - for each
+# key predictor  
+
+# below that, ### overall permanova, then if that's significant,
+# ### pairwise permanovas, ### SIMPER  
+
+# might have to write my own function for numeric predictors
+# simper definitely won't work on numeric predictors
+# permanova_pairwise turns them into factors
+
+key_preds_cat <- c("NERR_Region", "Vegetation_Zone",
+                   "Salinity_category",
+                   "Geomorphology", "Tidal_Range")
+key_preds_num <- c("condition", "SLR_last19yrs",
+                    "SET_minus_SLR_19yrs")
+
+for(i in seq_along(key_preds_cat)){
+    cat("\n\n---------------------------------------------------------- \n")
+    cat("---------------------------------------------------------- \n\n")
+    cat(paste0("~~~", key_preds_cat[i], "~~~\n\n"))
+
+    explanatory_tmp <- explanatory
+    names(explanatory_tmp)[which(names(explanatory_tmp) == key_preds_cat[i])] <- "predictor"
+    
+    perm <- adonis2(responses_scaled ~ predictor,
+                    data = explanatory_tmp,
+                    method = "euclidean",
+                    na.action = "na.omit"
+    )
+    
+    cat(paste0("PERMANOVA overall for ", key_preds_cat[i], "\n\n"))
+    print(perm)
+    
+    
+    if(perm$`Pr(>F)`[1] < 0.05){
+        cat(paste0("PERMANOVA for ", key_preds_cat[i], " was significant at the level alpha = 0.05. Pairwise tests follow. \n\n"))
+        cat(paste0("~~Pairwise PERMANOVA, ", key_preds_cat[i], "~~ \n\n"))
+        perm_pair <- permanova_pairwise(responses_scaled,
+                                        grp = explanatory_tmp$predictor,
+                                        method = "euclidean")
+        
+        print(perm_pair)
+        
+        cat(paste0("\n\n ~~SIMPER, ", key_preds_cat[i], "~~ \n\n"))
+        simp <- simper(responses_scaled, group = explanatory_tmp$predictor)
+        
+        print(summary(simp))
+            
+            
+    }
+
+}
+```
+
+
+# Region x Zone interaction  
+
+We are also interested in whether change is different in different zones based on their region. That's harder to put into a loop, so let's set it up properly.  
+
+```{r}
+perm <- adonis2(responses_scaled ~ NERR_Region*Vegetation_Zone, 
+                data = explanatory_scaled_main, 
+                method = "euclidean", 
+                na.action = "na.omit")
+perm
+```
+
+The interaction is significant, so now we need to break it down.  
+
+```{r}
+regs <- unique(explanatory_scaled_main$NERR_Region)
+zones <- unique(explanatory_scaled_main$Vegetation_Zone)
+
+
+for(i in seq_along(zones)){
+    
+    cat("\n\n---------------------------------------------------------- \n")
+    cat("---------------------------------------------------------- \n\n")
+    cat(paste0("~~~", zones[i], "~~~\n\n"))
+    
+    rows_to_keep <- which(explanatory_scaled_main$Vegetation_Zone == zones[i])
+    
+    resp_tmp <- responses_scaled[rows_to_keep, ]
+    expl_tmp <- explanatory_scaled_main[rows_to_keep, ]
+    
+    # within zone i, is there a difference between regions?
+    # e.g. is the low marsh changing differently in different regions?
+    perm_tmp <- adonis2(resp_tmp ~ NERR_Region,
+                        data = expl_tmp,
+                        method = "euclidean", 
+                        na.action = "na.omit")
+    
+    cat(paste0("PERMANOVA overall for regional differences in vegetation zone ", zones[i], "\n\n"))
+    print(perm_tmp)
+    
+    
+    if(perm_tmp$`Pr(>F)`[1] < 0.05){
+        cat(paste0("PERMANOVA for ", zones[i], " was significant at the level alpha = 0.05. Pairwise tests follow. \n\n"))
+        cat(paste0("~~Pairwise PERMANOVA, ", zones[i], "~~ \n\n"))
+        
+        
+        # which zone(s) are different from which others?
+        perm_pair_tmp <- permanova_pairwise(resp_tmp, expl_tmp$NERR_Region,
+                                            method = "euclidean")
+        
+        print(perm_pair_tmp)
+        
+        cat(paste0("\n\n ~~SIMPER, ", zones[i], "~~ \n\n"))
+        simp <- simper(resp_tmp, group = expl_tmp$NERR_Region)
+        
+        print(summary(simp))
+        
+    }
+}
+
+```
+
+
+
+
+# Ordinations  
+
+```{r}
+test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main, 
+                      method = "spearman",
+                      index = "euclidean",
+                      metric = "gower")
+
+
+cat("Explanatory variables used in bioenv: \n", paste("*", names(explanatory_scaled_main)), sep = "\n")
+
+test_bioenv
+
+summary(test_bioenv)
+```
+
+## NMDS  
+
+```{r}
+veg_mds <- metaMDS(responses_scaled,
+                   distance = "euclidean",
+                   autotransform = FALSE,
+                   trace = FALSE)
+cat("2-dimensional stress: ", round(veg_mds$stress, 3))
+```
+
+```{r}
+data.scores <- as.data.frame(scores(veg_mds))
+loadings <- as.data.frame(scores(envfit(veg_mds, responses_scaled), display = "vectors")) * 5
+
+# numeric explanatory loadings
+expl_numeric <- explanatory_scaled %>% 
+    select(SLR_last19yrs,
+           condition,
+           SET_minus_SLR_19yrs,
+           Vegetation_Zone)
+
+env_expl <- as.data.frame(scores(envfit(veg_mds, expl_numeric, na.rm = TRUE), display = "vectors")) * 7
+
+```
+
+
+
+```{r}
+# plot all sites
+p <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_text(label = rownames(responses_scaled),
+              size = rel(3)) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+p
+
+# points only
+ppts <- ggplot(data.scores,
+            aes(x = NMDS1,
+                y = NMDS2)) +
+    geom_point() +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    labs(title = "NMDS",
+         subtitle = "All sites")
+```
+
+## Numeric Loadings overlaid - all  
+
+```{r}
+p2 <- ppts +
+    geom_segment(data = env_expl,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "blue") +
+    geom_text_repel(data = env_expl,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(env_expl),
+              col = "blue")
+
+p2
+```
+
+
+## Color by categorical predictors that were important in bioenv  
+
+```{r}
+nmds_and_expl <- cbind(data.scores, explanatory_scaled_main)
+```
+
+```{r}
+plot_nmds2 <- function(expl_color){
+    
+p <- ggplot(nmds_and_expl,
+            aes(x = NMDS1,
+                y = NMDS2,
+                col = {{expl_color}})) +
+    geom_segment(data = loadings,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "red") +
+    geom_text_repel(data = loadings,
+              label = rownames(loadings),
+              col = "red") +
+    geom_segment(data = env_expl,
+                 aes(x = 0, y = 0,
+                     xend = NMDS1, yend = NMDS2),
+                 col = "blue") +
+    geom_text_repel(data = env_expl,
+              aes(x = NMDS1, y = NMDS2),
+              label = rownames(env_expl),
+              col = "blue") +
+    geom_point(size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    theme_bw() +
+    labs(title = "NMDS")
+
+p
+}
+```
+
+```{r}
+plot_nmds2(NERR_Region) + labs(title = "NMDS for all regions", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+```
+
+```{r}
+plot_nmds2(Vegetation_Zone) + labs(title = "NMDS for all regions", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+```
+
+```{r}
+plot_nmds2(Salinity_category) + labs(title = "NMDS for all regions", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+```
+
+
+
+## Bio-env best model graph  
+
+
+```{r}
+env_expl <- env_expl[2, ]
+```
+
+```{r}
+plot_nmds2(NERR_Region) + labs(title = "NMDS for all regions", subtitle = "blue = best quantitative predictor(s) from BIO-ENV; \nred = loadings in response matrix")
+```
+
+```{r}
+plot_nmds2(Vegetation_Zone) + labs(title = "NMDS for all regions", subtitle = "blue = best quantitative predictor(s) from BIO-ENV; \nred = loadings in response matrix")
+```
+
