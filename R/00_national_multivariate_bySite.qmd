@@ -1,5 +1,6 @@
 ---
-title: "Namaste National Multivariate Analyses"
+title: "Namaste National Analyses"
+subtitle: "Multivariate changes, at site level"
 date: today
 format: 
     html:
@@ -7,9 +8,14 @@ format:
         toc-location: left
         code-fold: true
         embed-resources: true
+    pdf:
+        toc: true
+        echo: false
 warning: false
 message: false
 error: true
+fig-width: 7
+fig-height: 5
 ---
 
 ```{r}
@@ -149,22 +155,21 @@ test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main,
                       metric = "gower")
 
 
-cat("Explanatory variables used in bioenv: \n")
-cat(paste("*", names(explanatory_scaled_main)), sep = "\n")
+cat("Explanatory variables used in bioenv: \n", paste("*", names(explanatory_scaled_main)), sep = "\n")
 
 test_bioenv
 
 summary(test_bioenv)
 ```
 
-# NMDS  
+## NMDS  
 
 ```{r}
 veg_mds <- metaMDS(responses_scaled,
                    distance = "euclidean",
                    autotransform = FALSE,
                    trace = FALSE)
-veg_mds$stress
+cat("2-dimensional stress: ", round(veg_mds$stress, 3))
 ```
 
 ```{r}
@@ -263,7 +268,9 @@ p <- ggplot(nmds_and_expl,
               aes(x = NMDS1, y = NMDS2),
               label = rownames(env_expl),
               col = "blue") +
-    geom_point(size = 3, alpha = 0.6) +
+    geom_point(size = 3, alpha = 0.8) +
+    khroma::scale_color_muted() +
+    theme_bw() +
     labs(title = "NMDS")
 
 p
@@ -271,7 +278,7 @@ p
 ```
 
 ```{r}
-plot_nmds2(NERR_Region)
+plot_nmds2(NERR_Region) + labs(title = "NMDS for all regions", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 ```
 
 ## Bio-env best model graph  
@@ -282,11 +289,11 @@ env_expl <- env_expl[1:2, ]
 ```
 
 ```{r}
-plot_nmds2(NERR_Region)
+plot_nmds2(NERR_Region) + labs(title = "NMDS for all regions", subtitle = "blue = best quantitative predictor(s) from BIO-ENV; \nred = loadings in response matrix")
 ```
 
 
-# How do ordinations change when we remove the Gulf sites?  
+# Removing Gulf Sites   
 
 ```{r}
 gulfsites <- which(dat_main$NERR_Region == "Gulf Coast")
@@ -304,22 +311,21 @@ test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main,
                       metric = "gower")
 
 
-cat("Explanatory variables used in bioenv: \n")
-cat(paste("*", names(explanatory_scaled_main)), sep = "\n")
+cat("Explanatory variables used in bioenv: \n", paste("*", names(explanatory_scaled_main)), sep = "\n")
 
 test_bioenv
 
 summary(test_bioenv)
 ```
 
-# NMDS  
+## NMDS  
 
 ```{r}
 veg_mds <- metaMDS(responses_scaled,
                    distance = "euclidean",
                    autotransform = FALSE,
                    trace = FALSE)
-veg_mds$stress
+cat("2-dimensional stress: ", round(veg_mds$stress, 3))
 ```
 
 ```{r}
@@ -397,9 +403,9 @@ nmds_and_expl <- cbind(data.scores, explanatory_scaled_main)
 ```
 
 ```{r}
-plot_nmds2(Salinity_category)
+plot_nmds2(Salinity_category) + labs(title = "NMDS excluding Gulf Sites", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 
-plot_nmds2(NERR_Region)
+plot_nmds2(NERR_Region) + labs(title = "NMDS excluding Gulf Sites", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 ```
 
 ## Bio-env best model graph  
@@ -410,9 +416,9 @@ env_expl <- env_expl[4, ]
 ```
 
 ```{r}
-plot_nmds2(Salinity_category)
+plot_nmds2(Salinity_category) + labs(title = "NMDS excluding Gulf Sites", subtitle = "blue = best quantitative predictor(s) from BIO-ENV; \nred = loadings in response matrix")
 
-plot_nmds2(NERR_Region)
+plot_nmds2(NERR_Region) + labs(title = "NMDS excluding Gulf Sites", subtitle = "blue = best quantitative predictor(s) from BIO-ENV; \nred = loadings in response matrix")
 ```
 
 
