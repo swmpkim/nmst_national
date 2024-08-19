@@ -1,6 +1,7 @@
 ---
 title: "Namaste National Analyses"
 subtitle: "Multivariate changes, at site level"
+output-file: "2024-08-19 Nat'l Multivar by Site"
 date: today
 format: 
     html:
@@ -48,7 +49,11 @@ dat_main <- dat %>%
            condition = NERRs_Landscape_resiliency_condition_sum_quantile,
            SET_change:last_col()
     ) %>% 
-    mutate(# fix Geomorphyology
+    mutate(
+        # replace the H.Halophyte NA with the average of the others
+        H.Halophyte_slope = case_when(is.na(H.Halophyte_slope) ~ mean(H.Halophyte_slope, na.rm = TRUE),
+                                      .default = H.Halophyte_slope),
+        # fix Geomorphyology
         Geomorphology = case_when(Geomorphology == "Back Barrier" ~ "Back barrier",
                                   .default = Geomorphology),
         # turn character cols into factors
@@ -58,8 +63,7 @@ dat_main <- dat %>%
         Salinity_category = factor(Salinity_category,
                                    levels = c("Fresh", "Oligohaline",
                                               "Mesohaline", "Polyhaline"), ordered = TRUE)
-    ) %>% 
-    filter(!is.na(H.Halophyte_slope))
+    ) 
 
 responses <- dat_main %>% 
     select(Total.unvegetated_slope:SWdiv_slope)
