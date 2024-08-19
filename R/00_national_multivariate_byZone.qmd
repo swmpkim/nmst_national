@@ -95,73 +95,12 @@ explanatory_scaled_main <- explanatory_scaled %>%
 
 # PERMANOVA  
 
-One PERMANOVA for each key factor we care about. Setting this up like a multiple regression means each predictor's effect (and p-value) is influenced by what other predictors are present in the model. We just want to know if, overall, aside from anything else, each of these are different, so I'm doing these one-at-a-time.  
-
-If a PERMANOVA is significant for a factor, then pairwise comparisons will be run: pairwise PERMANOVAs to see which groups are different from which other groups, and SIMPER, which is pairwise between groups to show which pieces of the response matrix are most influencing differences between groups.  
-
-NOTE that SIMPER will run all pairs whether the PERMANOVA showed significance or not, so be sure to check the pairwise PERMANOVA before getting too excited about SIMPER output!  
-
-
-
-```{r}
-# set up a loop to make a 2nd level header - ## - for each
-# key predictor  
-
-# below that, ### overall permanova, then if that's significant,
-# ### pairwise permanovas, ### SIMPER  
-
-# might have to write my own function for numeric predictors
-# simper definitely won't work on numeric predictors
-# permanova_pairwise turns them into factors
-
-key_preds_cat <- c("NERR_Region", "Vegetation_Zone",
-                   "Salinity_category",
-                   "Geomorphology", "Tidal_Range")
-key_preds_num <- c("condition", "SLR_last19yrs",
-                    "SET_minus_SLR_19yrs")
-
-for(i in seq_along(key_preds_cat)){
-    cat("\n\n---------------------------------------------------------- \n")
-    cat("---------------------------------------------------------- \n\n")
-    cat(paste0("~~~", key_preds_cat[i], "~~~\n\n"))
-
-    explanatory_tmp <- explanatory
-    names(explanatory_tmp)[which(names(explanatory_tmp) == key_preds_cat[i])] <- "predictor"
-    
-    perm <- adonis2(responses_scaled ~ predictor,
-                    data = explanatory_tmp,
-                    method = "euclidean",
-                    na.action = "na.omit"
-    )
-    
-    cat(paste0("PERMANOVA overall for ", key_preds_cat[i], "\n\n"))
-    print(perm)
-    
-    
-    if(perm$`Pr(>F)`[1] < 0.05){
-        cat(paste0("PERMANOVA for ", key_preds_cat[i], " was significant at the level alpha = 0.05. Pairwise tests follow. \n\n"))
-        cat(paste0("~~Pairwise PERMANOVA, ", key_preds_cat[i], "~~ \n\n"))
-        perm_pair <- permanova_pairwise(responses_scaled,
-                                        grp = explanatory_tmp$predictor,
-                                        method = "euclidean")
-        
-        print(perm_pair)
-        
-        cat(paste0("\n\n ~~SIMPER, ", key_preds_cat[i], "~~ \n\n"))
-        simp <- simper(responses_scaled, group = explanatory_tmp$predictor)
-        
-        print(summary(simp))
-            
-            
-    }
-
-}
-```
+I wasn't entirely sure how to account for zone when running PERMANOVAs, so the only one I'm retaining is the one including Region, Vegetation Zone, and their interaction. Everything else we can assess via the ordinations.  
 
 
 # Region x Zone interaction  
 
-We are also interested in whether change is different in different zones based on their region. That's harder to put into a loop, so let's set it up properly.  
+We are interested in whether change is different in different zones based on their region - e.g., is the low marsh changing differently along the Gulf Coast vs. in the Northeast?  
 
 ```{r}
 perm <- adonis2(responses_scaled ~ NERR_Region*Vegetation_Zone, 
@@ -171,7 +110,7 @@ perm <- adonis2(responses_scaled ~ NERR_Region*Vegetation_Zone,
 perm
 ```
 
-The interaction is significant, so now we need to break it down.  
+The interaction is significant, so now we need to break it down. I will loop through each vegetation zone, and perform pairwise PERMANOVAs on the regions for each zone.    
 
 ```{r}
 regs <- unique(explanatory_scaled_main$NERR_Region)
@@ -320,12 +259,16 @@ p2
 
 ## Color by categorical predictors that were important in bioenv  
 
+Salinity Category, NERR Region, and Vegetation Zone  
+
+(condition was the only quantitative variable from bioenv)  
+
 ```{r}
 nmds_and_expl <- cbind(data.scores, explanatory_scaled_main)
 ```
 
 ```{r}
-plot_nmds2 <- function(expl_color){
+plot_nmds2 <- function(expl_color, expl_shape = NULL){
     
 p <- ggplot(nmds_and_expl,
             aes(x = NMDS1,
@@ -346,7 +289,8 @@ p <- ggplot(nmds_and_expl,
               aes(x = NMDS1, y = NMDS2),
               label = rownames(env_expl),
               col = "blue") +
-    geom_point(size = 3, alpha = 0.8) +
+    geom_point(aes(shape = {{expl_shape}}),
+               size = 3, alpha = 0.8) +
     khroma::scale_color_muted() +
     theme_bw() +
     labs(title = "NMDS")
@@ -356,15 +300,22 @@ p
 ```
 
 ```{r}
-plot_nmds2(NERR_Region) + labs(title = "NMDS for all regions", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+plot_nmds2(NERR_Region, Vegetation_Zone) + 
+    labs(title = "NMDS for all regions", 
+         subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+```
+
+
+```{r}
+plot_nmds2(Salinity_category, Vegetation_Zone) + 
+    labs(title = "NMDS for all regions", 
+         subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 ```
 
 ```{r}
-plot_nmds2(Vegetation_Zone) + labs(title = "NMDS for all regions", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
-```
-
-```{r}
-plot_nmds2(Salinity_category) + labs(title = "NMDS for all regions", subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+plot_nmds2(Vegetation_Zone, Salinity_category) +
+    labs(title = "NMDS for all regions", 
+         subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 ```
 
 
@@ -377,10 +328,20 @@ env_expl <- env_expl[2, ]
 ```
 
 ```{r}
-plot_nmds2(NERR_Region) + labs(title = "NMDS for all regions", subtitle = "blue = best quantitative predictor(s) from BIO-ENV; \nred = loadings in response matrix")
+plot_nmds2(NERR_Region, Vegetation_Zone) + 
+    labs(title = "NMDS for all regions", 
+         subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+```
+
+
+```{r}
+plot_nmds2(Salinity_category, Vegetation_Zone) + 
+    labs(title = "NMDS for all regions", 
+         subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 ```
 
 ```{r}
-plot_nmds2(Vegetation_Zone) + labs(title = "NMDS for all regions", subtitle = "blue = best quantitative predictor(s) from BIO-ENV; \nred = loadings in response matrix")
+plot_nmds2(Vegetation_Zone, Salinity_category) +
+    labs(title = "NMDS for all regions", 
+         subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 ```
-
