@@ -1,6 +1,6 @@
 ---
 title: "Namaste National Analysis - Ordinations"
-output-file: "2024-07-30 PCA Slopes EIR, Rich, Div, Live by Site"
+output-file: "2024-09-27 PCA Slopes EIR, Rich, Div, Live by Site"
 date: today
 format: 
     pdf:

@@ -1,3 +1,7 @@
+# re-run 11/6/24 due to updated Distances in NIW file
+
+# re-run 9/27 to remove tidal fresh sites (also reran 02_combining)
+
 # re-run 4/17 after removing original ACE files (ACE has split into 2 files)
 
 # updated 4/16/24 to get updates and try to address joining issues

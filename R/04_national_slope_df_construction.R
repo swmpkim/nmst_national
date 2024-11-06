@@ -1,3 +1,5 @@
+# re-run 11/6/24 due to Distance updates in NIW file
+# re-run 9/27/24
 # updated 7/11/24 to clarify SET/SLR difference, and add a column
 # so can do that difference for both time frames
 

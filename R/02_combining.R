@@ -1,3 +1,7 @@
+# last update/run 
+# 11/6/24 - updated Distances in NIW file
+# 9/27/24 - had to modify APA-LSM in expl matrix and remove FW sites
+
 library(dplyr)
 library(tidyr)
 library(stringr)
@@ -30,6 +34,7 @@ sites_to_remove <- expl_dat[which(expl_dat$remove_site_from_national_analysis ==
 sites_to_remove <- sites_to_remove %>% 
     mutate(reserve = case_when(str_starts(reserve, "CBM") ~ "CBM",
                                str_starts(reserve, "NOC") ~ "NOC",
+                               str_starts(reserve, "APA") ~ "APA",
                                .default = reserve),
            ResSt = paste(reserve, site_id))
 

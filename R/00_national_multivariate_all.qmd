@@ -1,13 +1,13 @@
 ---
 title: "Namaste National Analyses"
-subtitle: "PERMANOVA and Ordination of site-level vegetation community change"
-output-file: "2024-09-27 Nat'l Multivar by Site"
+subtitle: "Multivariate changes, at site level"
+output-file: "2024-08-19 Nat'l Multivar by Site"
 date: today
 format: 
     html:
         toc: true
         toc-location: left
-        echo: false
+        code-fold: true
         embed-resources: true
     pdf:
         toc: true
@@ -27,11 +27,11 @@ library(ecole)
 ```
 
 
- 
+## read and prepare data  
+
+Using the "slopes" by site data frame - changes at the site level.  
 
 ```{r}
-# Using the "slopes" by site data frame - changes at the site level. 
-
 dat <- read.csv(here::here("data",
                            "compiled",
                            "slopesAndExpl_bySite.csv"))
@@ -50,8 +50,8 @@ dat_main <- dat %>%
            SET_change:last_col()
     ) %>% 
     mutate(
-        # replace the H.Halophyte NA with 0; no halophytes at site
-        H.Halophyte_slope = case_when(is.na(H.Halophyte_slope) ~ 0,
+        # replace the H.Halophyte NA with the average of the others
+        H.Halophyte_slope = case_when(is.na(H.Halophyte_slope) ~ mean(H.Halophyte_slope, na.rm = TRUE),
                                       .default = H.Halophyte_slope),
         # fix Geomorphyology
         Geomorphology = case_when(Geomorphology == "Back Barrier" ~ "Back barrier",
@@ -91,19 +91,20 @@ explanatory_scaled_main <- explanatory_scaled %>%
 
 One PERMANOVA for each key factor we care about. Setting this up like a multiple regression means each predictor's effect (and p-value) is influenced by what other predictors are present in the model. We just want to know if, overall, aside from anything else, each of these are different.  
 
-If a PERMANOVA is significant for a factor, then pairwise comparisons will be run: pairwise PERMANOVAs to see which groups are different from which other groups. We had planned to run SIMPER, to assess which changes are contributing most to group differences; but SIMPER is based on Bray-Curtis dissimilarity and we are using Euclidean distance (Bray-Curtis is for non-negative integers, which is not our data type).  
+If a PERMANOVA is significant for a factor, then pairwise comparisons will be run: pairwise PERMANOVAs to see which groups are different from which other groups, and SIMPER, which is pairwise between groups to show which pieces of the response matrix are most influencing differences between groups.  
 
+NOTE that SIMPER will run all pairs whether the PERMANOVA showed significance or not, so be sure to check the pairwise PERMANOVA before getting too excited about SIMPER output!  
 
 ```{r}
 # set up a loop to make a 2nd level header - ## - for each
 # key predictor  
 
 # below that, ### overall permanova, then if that's significant,
-# ### pairwise permanovas 
+# ### pairwise permanovas, ### SIMPER  
 
-# not sure permanova can handle numeric predictors, 
-# so only focusing on categorical
-
+# might have to write my own function for numeric predictors
+# simper definitely won't work on numeric predictors
+# permanova_pairwise turns them into factors
 
 key_preds_cat <- c("NERR_Region", "Salinity_category",
                     "Geomorphology", "Tidal_Range")
@@ -137,17 +138,19 @@ for(i in seq_along(key_preds_cat)){
         
         print(perm_pair)
         
-        cat("\n\n")
-       
+        cat(paste0("\n\n ~~SIMPER, ", key_preds_cat[i], "~~ \n\n"))
+        simp <- simper(responses_scaled, group = explanatory_tmp$predictor)
+        
+        print(summary(simp))
+            
+            
     }
 
 }
 ```
 
 
-# Ordination - NMDS and BIO-ENV  
-
-NMDS and BIO-ENV are used in conjunction below. NMDS uses Euclidean distance. BIO-ENV is calculating Spearman correlation, using Euclidean distance for the response matrix (as does NMDS) and Gower's distance for the environmental variables (because Gower's distance can handle factors in addition to continuous data). Salinity and Tidal Range have been specified as ordered factors.   
+# Ordinations  
 
 ```{r}
 test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main, 

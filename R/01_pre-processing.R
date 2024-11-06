@@ -1,3 +1,5 @@
+# latest run 11/6/24, NIW only due to updated Distances
+
 library(dplyr)
 library(tidyr)
 library(stringr)
