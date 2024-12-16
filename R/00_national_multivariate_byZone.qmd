@@ -1,7 +1,7 @@
 ---
 title: "Namaste National Analyses"
 subtitle: "Ordinations of zone- and plot- level changes"
-output-file: "2024-09-27 Nat'l Multivar by Zone and Plot"
+output-file: "2024-12-14 Nat'l Multivar by Zone and Plot"
 date: today
 format: 
     html:
@@ -18,6 +18,8 @@ error: true
 fig-width: 7
 fig-height: 5
 ---
+
+Latest update: 12-3-24 - making a separate NMDS plot for each region, in plot-level section. rendered output file on 12-14-24.
 
 ```{r}
 library(tidyverse)
@@ -224,6 +226,18 @@ p
 plot_nmds2(NERR_Region, Vegetation_Zone) + 
     labs(title = "NMDS for all regions", 
          subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+```
+
+## Interactive NMDS output  
+
+Note this is not 3D, but you can zoom in on the clustered points.  
+
+```{r}
+p_interact <- plot_nmds2(NERR_Region, Vegetation_Zone) + 
+    labs(title = "NMDS for all regions", 
+         subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
+
+plotly::ggplotly(p_interact)
 ```
 
 
@@ -453,6 +467,9 @@ Salinity Category, NERR Region, and Vegetation Zone
 
 ```{r}
 nmds_and_expl <- cbind(data.scores, explanatory_scaled_main)
+
+# get Reserve in there too, post bio-env
+nmds_and_expl$Reserve <- explanatory$Reserve
 ```
 
 ```{r}
@@ -492,6 +509,26 @@ plot_nmds2(NERR_Region, Vegetation_Zone) +
     labs(title = "NMDS for all regions", 
          subtitle = "blue = quantitative environmental predictors; \nred = loadings in response matrix")
 ```
+
+
+### By Region  
+
+```{r}
+regs <- levels(nmds_and_expl$NERR_Region)
+nmds_and_expl_full <- nmds_and_expl
+for(i in seq_along(regs)){
+    nmds_and_expl <- nmds_and_expl_full %>% 
+        filter(NERR_Region == regs[i])
+    
+    print(plot_nmds2(Reserve, Vegetation_Zone) +
+        labs(title = paste0("NMDS for ", regs[i])))
+    
+}
+
+# re-make original data frame
+nmds_and_expl <- nmds_and_expl_full
+```
+
 
 
 ## Bio-env best model graph  
