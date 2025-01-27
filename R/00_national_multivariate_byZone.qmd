@@ -1,7 +1,7 @@
 ---
 title: "Namaste National Analyses"
 subtitle: "Ordinations of zone- and plot- level changes"
-output-file: "2024-12-14 Nat'l Multivar by Zone and Plot"
+output-file: "2025-01-27 Nat'l Multivar by Zone and Plot"
 date: today
 format: 
     html:
@@ -19,7 +19,11 @@ fig-width: 7
 fig-height: 5
 ---
 
-Latest update: 12-3-24 - making a separate NMDS plot for each region, in plot-level section. rendered output file on 12-14-24.
+Latest update: 
+
+1-27-25 - change EIR to EMI. Only changed in the code; did not re-generate national data frames. Also added random seeds to bioenv and nmds in zone-level ordinations (already present for plot-level).  
+
+12-3-24 - making a separate NMDS plot for each region, in plot-level section. rendered output file on 12-14-24.
 
 ```{r}
 library(tidyverse)
@@ -43,7 +47,7 @@ dat_main <- dat %>%
            Vegetation_Zone,
            Total.unvegetated_slope,
            Total.live.veg_slope,
-           EIR_slope,
+           EMI_slope = EIR_slope,
            H.Halophyte_slope,
            Richness_slope,
            SWdiv_slope,
@@ -89,6 +93,7 @@ explanatory_scaled_main <- explanatory_scaled %>%
 
 
 ```{r}
+set.seed(2025)
 test_bioenv <- bioenv(responses_scaled, explanatory_scaled_main, 
                       method = "spearman",
                       index = "euclidean",
@@ -105,6 +110,7 @@ summary(test_bioenv)
 ## NMDS  
 
 ```{r}
+set.seed(127)
 veg_mds <- metaMDS(responses_scaled,
                    distance = "euclidean",
                    autotransform = FALSE,
@@ -307,7 +313,7 @@ dat_main <- dat %>%
            Vegetation_Zone,
            Total.unvegetated_slope,
            Total.live.veg_slope,
-           EIR_slope,
+           EMI_slope = EIR_slope,
            Richness_slope,
            SWdiv_slope,
            tide_range_slope:Region,

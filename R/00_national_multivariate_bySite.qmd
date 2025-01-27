@@ -1,7 +1,7 @@
 ---
 title: "Namaste National Analyses"
 subtitle: "PERMANOVA and Ordination of site-level vegetation community change"
-output-file: "2024-12-14 Nat'l Multivar by Site"
+output-file: "2025-01-27 Nat'l Multivar by Site"
 date: today
 format: 
     html:
@@ -20,6 +20,8 @@ fig-height: 5
 ---
 
 Latest update:
+
+1-27-25 - change EIR to EMI. Only changed in the code; did not re-generate national data frames. Also added random seed before permanovas.  
 
 12-14-24 - incorporate NMDS of environmental variables; add random seeds before all nmds and bioenv runs
 
@@ -45,7 +47,7 @@ dat_main <- dat %>%
            SiteID,
            Total.unvegetated_slope,
            Total.live.veg_slope,
-           EIR_slope,
+           EMI_slope = EIR_slope,
            H.Halophyte_slope,
            Richness_slope,
            SWdiv_slope,
@@ -114,6 +116,8 @@ key_preds_cat <- c("NERR_Region", "Salinity_category",
 key_preds_num <- c("condition", "SLR_last19yrs",
                     "SET_minus_SLR_19yrs", "proportion_low")
 
+set.seed(2025)
+
 for(i in seq_along(key_preds_cat)){
     cat("\n\n---------------------------------------------------------- \n")
     cat("---------------------------------------------------------- \n\n")
@@ -156,7 +160,8 @@ Using community data here (at veg group level) rather than 'change'/slopes data 
 ```{r}
 dat.comm <- read.csv(here::here("data",
                            "compiled",
-                           "veg_and_expl.csv"))
+                           "veg_and_expl.csv")) %>% 
+    rename(EMI = EIR)
 ```
 
 
