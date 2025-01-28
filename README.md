@@ -4,7 +4,7 @@ This repository contains code that compiled national-level data frames from the 
 
 ## Data Processing from reserve-level to national
 
-### Inputs and Outputs
+### Inputs
 
 Input files for the national data frames were:
 
@@ -15,6 +15,8 @@ Input files for the national data frames were:
 -   *Explanatory matrix*, a spreadsheet of compiled information about each reserve and/or site.
 
 **Note:** national data frames were compiled before EIR (Ecotone Invader Ratio) was renamed to EMI (Ecotone Migration Index). Additionally, the spec files changed quite a bit before the final iteration of reserve-level code. Thus, if national-level data frames need to be regenerated in the future, some code modifications will need to be made for the newer versions of spec files. For these national analyses, we used the national data frames that referred to EIR and changed that to EMI in the code.
+
+### Outputs
 
 Outputs of these processing steps were the following csv files. See the national data frame data dictionary for details on the columns in each.
 
